@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Search, Star } from "lucide-react";
 
@@ -183,7 +184,10 @@ export function MarketTable({ coins }: { coins: MarketCoin[] }) {
                 </td>
 
                 <td className="px-3 py-3">
-                  <div className="flex items-center gap-2.5">
+                  <Link
+                    href={`/coin/${coin.id}`}
+                    className="flex w-fit items-center gap-2.5 rounded-md outline-none transition-opacity hover:opacity-75 focus-visible:ring-2 focus-visible:ring-ring/40"
+                  >
                     <div className="flex size-8 items-center justify-center rounded-full bg-foreground text-[9px] font-bold text-background">
                       {coin.symbol.slice(0, 2)}
                     </div>
@@ -193,7 +197,7 @@ export function MarketTable({ coins }: { coins: MarketCoin[] }) {
                         {coin.symbol}
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 </td>
 
                 <td className="px-3 py-3 text-right font-medium tabular-nums">
