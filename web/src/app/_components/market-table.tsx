@@ -17,7 +17,11 @@ const filters: { label: string; value: Filter }[] = [
   { label: "Losers", value: "losers" },
 ];
 
-function formatCurrency(value: number) {
+function formatCurrency(value: number | null) {
+  if (value === null) {
+    return "—";
+  }
+
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -25,14 +29,22 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function formatCompact(value: number) {
-  return new Intl.NumberFormat("en-US", {
+function formatCompact(value: number | null) {
+  if (value === null) {
+    return "—";
+  }
+
+  return `$${new Intl.NumberFormat("en-US", {
     notation: "compact",
     maximumFractionDigits: 2,
-  }).format(value);
+  }).format(value)}`;
 }
 
-function Change({ value }: { value: number }) {
+function Change({ value }: { value: number | null }) {
+  if (value === null) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
   const positive = value >= 0;
 
   return (
@@ -56,6 +68,10 @@ function Sparkline({
   values: number[];
   positive: boolean;
 }) {
+  if (values.length < 2) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
@@ -105,8 +121,12 @@ export function MarketTable({ coins }: { coins: MarketCoin[] }) {
 
       const matchesFilter =
         filter === "all" ||
-        (filter === "gainers" && coin.change24h >= 0) ||
-        (filter === "losers" && coin.change24h < 0);
+        (filter === "gainers" &&
+          coin.change24h !== null &&
+          coin.change24h >= 0) ||
+        (filter === "losers" &&
+          coin.change24h !== null &&
+          coin.change24h < 0);
 
       return matchesSearch && matchesFilter;
     });
@@ -118,7 +138,7 @@ export function MarketTable({ coins }: { coins: MarketCoin[] }) {
         <div>
           <CardTitle>Markets</CardTitle>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Search and scan the market before drilling into asset-level analysis.
+            Search and scan live market data before drilling into asset-level analysis.
           </p>
         </div>
 
@@ -179,7 +199,7 @@ export function MarketTable({ coins }: { coins: MarketCoin[] }) {
                     >
                       <Star className="size-3.5" />
                     </button>
-                    <span className="w-4 tabular-nums">{coin.rank}</span>
+                    <span className="w-4 tabular-nums">{coin.rank ?? "—"}</span>
                   </div>
                 </td>
 
@@ -213,16 +233,16 @@ export function MarketTable({ coins }: { coins: MarketCoin[] }) {
                   <Change value={coin.change7d} />
                 </td>
                 <td className="px-3 py-3 text-right tabular-nums">
-                  {`$${formatCompact(coin.marketCap)}`}
+                  {formatCompact(coin.marketCap)}
                 </td>
                 <td className="px-3 py-3 text-right tabular-nums">
-                  {`$${formatCompact(coin.volume24h)}`}
+                  {formatCompact(coin.volume24h)}
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex justify-end">
                     <Sparkline
                       values={coin.sparkline}
-                      positive={coin.change7d >= 0}
+                      positive={(coin.change7d ?? 0) >= 0}
                     />
                   </div>
                 </td>

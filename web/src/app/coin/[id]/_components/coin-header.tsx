@@ -8,9 +8,13 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { CoinDetail } from "../_data/coin-detail";
+import type { CoinDetail } from "@/types/coin";
 
-function formatPrice(value: number) {
+function formatPrice(value: number | null) {
+  if (value === null) {
+    return "Unavailable";
+  }
+
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -18,9 +22,21 @@ function formatPrice(value: number) {
   }).format(value);
 }
 
+function summarizeDescription(description: string | null) {
+  if (!description) {
+    return "Description unavailable from the market-data provider.";
+  }
+
+  if (description.length <= 260) {
+    return description;
+  }
+
+  return `${description.slice(0, 257).trimEnd()}…`;
+}
+
 export function CoinHeader({ detail }: { detail: CoinDetail }) {
   const { coin } = detail;
-  const positive = coin.change24h >= 0;
+  const positive = (coin.change24h ?? 0) >= 0;
 
   return (
     <section className="border-b pb-6">
@@ -35,8 +51,10 @@ export function CoinHeader({ detail }: { detail: CoinDetail }) {
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Badge variant="outline">Rank #{coin.rank}</Badge>
-            <Badge variant="secondary">Demo data</Badge>
+            <Badge variant="outline">
+              {coin.rank !== null ? `Rank #${coin.rank}` : "Unranked"}
+            </Badge>
+            <Badge variant="secondary">Live data</Badge>
           </div>
 
           <div className="flex items-center gap-3">
@@ -53,7 +71,7 @@ export function CoinHeader({ detail }: { detail: CoinDetail }) {
                 </span>
               </div>
               <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-                {detail.description}
+                {summarizeDescription(detail.description)}
               </p>
             </div>
           </div>
@@ -64,21 +82,23 @@ export function CoinHeader({ detail }: { detail: CoinDetail }) {
             <div className="text-3xl font-semibold tracking-tight tabular-nums">
               {formatPrice(coin.price)}
             </div>
-            <div
-              className={
-                positive
-                  ? "mt-1 flex items-center gap-1 text-xs font-medium text-emerald-600 lg:justify-end dark:text-emerald-400"
-                  : "mt-1 flex items-center gap-1 text-xs font-medium text-rose-600 lg:justify-end dark:text-rose-400"
-              }
-            >
-              {positive ? (
-                <ArrowUpRight className="size-3.5" />
-              ) : (
-                <ArrowDownRight className="size-3.5" />
-              )}
-              {positive ? "+" : ""}
-              {coin.change24h.toFixed(2)}% today
-            </div>
+            {coin.change24h !== null && (
+              <div
+                className={
+                  positive
+                    ? "mt-1 flex items-center gap-1 text-xs font-medium text-emerald-600 lg:justify-end dark:text-emerald-400"
+                    : "mt-1 flex items-center gap-1 text-xs font-medium text-rose-600 lg:justify-end dark:text-rose-400"
+                }
+              >
+                {positive ? (
+                  <ArrowUpRight className="size-3.5" />
+                ) : (
+                  <ArrowDownRight className="size-3.5" />
+                )}
+                {positive ? "+" : ""}
+                {coin.change24h.toFixed(2)}% today
+              </div>
+            )}
           </div>
 
           <Button variant="outline" size="icon" aria-label={`Add ${coin.name} to watchlist`}>

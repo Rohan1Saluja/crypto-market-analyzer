@@ -2,13 +2,14 @@ export type MarketCoin = {
   id: string;
   name: string;
   symbol: string;
-  rank: number;
-  price: number;
-  change1h: number;
-  change24h: number;
-  change7d: number;
-  marketCap: number;
-  volume24h: number;
+  imageUrl: string | null;
+  rank: number | null;
+  price: number | null;
+  change1h: number | null;
+  change24h: number | null;
+  change7d: number | null;
+  marketCap: number | null;
+  volume24h: number | null;
   sparkline: number[];
 };
 
@@ -16,5 +17,5 @@ export type MarketStat = {
   label: string;
   value: string;
   helper: string;
-  change?: number;
+  change: number | null;
 };

@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { AppHeader } from "@/components/layout/app-header";
+import { coinService } from "@/services/coin.service";
 import { AnalysisSnapshot } from "./_components/analysis-snapshot";
 import { CoinHeader } from "./_components/coin-header";
 import { CoinMetrics } from "./_components/coin-metrics";
 import { PriceChart } from "./_components/price-chart";
-import { getCoinDetail } from "./_data/coin-detail";
 
 type CoinPageProps = {
   params: Promise<{ id: string }>;
@@ -16,7 +16,7 @@ export async function generateMetadata({
   params,
 }: CoinPageProps): Promise<Metadata> {
   const { id } = await params;
-  const detail = getCoinDetail(id);
+  const detail = await coinService.getDetail(id);
 
   if (!detail) {
     return {
@@ -26,17 +26,24 @@ export async function generateMetadata({
 
   return {
     title: `${detail.coin.name} (${detail.coin.symbol})`,
-    description: detail.description,
+    description:
+      detail.description ??
+      `${detail.coin.name} market data and technical analysis.`,
   };
 }
 
 export default async function CoinPage({ params }: CoinPageProps) {
   const { id } = await params;
-  const detail = getCoinDetail(id);
+  const detail = await coinService.getDetail(id);
 
   if (!detail) {
     notFound();
   }
+
+  const [priceHistory, technicals] = await Promise.all([
+    coinService.getPriceHistory(id, "7d"),
+    coinService.getTechnicals(id),
+  ]);
 
   return (
     <div className="min-h-screen bg-muted/20">
@@ -52,9 +59,12 @@ export default async function CoinPage({ params }: CoinPageProps) {
         <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <PriceChart
             symbol={detail.coin.symbol}
-            data={detail.priceHistory}
+            data={priceHistory ?? []}
           />
-          <AnalysisSnapshot detail={detail} />
+          <AnalysisSnapshot
+            symbol={detail.coin.symbol}
+            technicals={technicals}
+          />
         </section>
 
         <section className="mt-4 rounded-lg border bg-card p-4">
@@ -75,31 +85,42 @@ export default async function CoinPage({ params }: CoinPageProps) {
             )}
           </div>
 
-          <div className="grid gap-5 pt-4 md:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="grid gap-5 pt-4 md:grid-cols-[minmax(0,1fr)_300px]">
             <div>
               <h2 className="text-sm font-medium">About {detail.coin.name}</h2>
               <p className="mt-2 max-w-3xl text-xs leading-6 text-muted-foreground">
-                {detail.description} This route is intentionally structured around
-                backend-ready data contracts so live market data, historical candles,
-                fundamentals, news, and calculated indicators can be supplied by
-                FastAPI without rebuilding the page.
+                {detail.description ??
+                  "Description unavailable from the market-data provider."}
               </p>
             </div>
 
             <div className="rounded-lg border bg-muted/20 p-3">
               <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-                Next backend contract
+                Live API contracts
               </div>
               <div className="mt-2 font-mono text-[11px] leading-5 text-foreground">
-                GET /coins/{detail.coin.id}
+                GET /api/v1/coins/{detail.coin.id}
                 <br />
-                GET /coins/{detail.coin.id}/candles
+                GET /api/v1/coins/{detail.coin.id}/price-history
                 <br />
-                GET /coins/{detail.coin.id}/technicals
+                GET /api/v1/coins/{detail.coin.id}/technicals
               </div>
             </div>
           </div>
         </section>
+
+        <footer className="mt-6 border-t pt-4 text-[10px] text-muted-foreground">
+          Market data provided by{" "}
+          <a
+            href="https://www.coingecko.com/"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            CoinGecko
+          </a>
+          .
+        </footer>
       </main>
     </div>
   );
