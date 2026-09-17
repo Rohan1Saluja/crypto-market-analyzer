@@ -1,9 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 import { AppHeader } from "@/components/layout/app-header";
-import { MarketStatCard } from "@/components/market/market-stat-card";
-import { MarketTable } from "@/components/market/market-table";
-import { TopMovers } from "@/components/market/top-movers";
 import { marketCoins, marketStats } from "@/data/market";
+import { MarketStatCard } from "./_components/market-stat-card";
+import { MarketTable } from "./_components/market-table";
+import { TopMovers } from "./_components/top-movers";
 
 export default function Home() {
   return (
