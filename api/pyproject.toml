@@ -1,0 +1,29 @@
+[project]
+name = "crypto-market-analyzer-api"
+version = "0.1.0"
+description = "FastAPI backend for Crypto Market Analyzer"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi[standard]",
+  "pydantic-settings",
+]
+
+[dependency-groups]
+dev = [
+  "httpx",
+  "pytest",
+  "ruff",
+]
+
+[tool.fastapi]
+entrypoint = "app.main:app"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
