@@ -1,5 +1,5 @@
 {
-  "name": "crypto-market-analyzer",
+  "name": "@crypto-market-analyzer/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
