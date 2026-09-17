@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { CoinDetail } from "../_data/coin-detail";
+import type { TechnicalSnapshot } from "@/types/coin";
 
 function formatPrice(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -28,8 +28,27 @@ function Tone({ value }: { value: string }) {
   );
 }
 
-export function AnalysisSnapshot({ detail }: { detail: CoinDetail }) {
-  const { technicals, coin } = detail;
+export function AnalysisSnapshot({
+  symbol,
+  technicals,
+}: {
+  symbol: string;
+  technicals: TechnicalSnapshot | null;
+}) {
+  if (!technicals) {
+    return (
+      <Card>
+        <CardHeader className="border-b pb-3">
+          <CardTitle>Technical snapshot</CardTitle>
+        </CardHeader>
+        <CardContent className="text-xs leading-5 text-muted-foreground">
+          There is not enough real historical data available to calculate the
+          technical snapshot for {symbol}.
+        </CardContent>
+      </Card>
+    );
+  }
+
   const rsiPosition = `${Math.max(0, Math.min(100, technicals.rsi))}%`;
 
   return (
@@ -38,7 +57,7 @@ export function AnalysisSnapshot({ detail }: { detail: CoinDetail }) {
         <div>
           <CardTitle>Technical snapshot</CardTitle>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Derived demo indicators for {coin.symbol}. These become backend-calculated signals later.
+            Calculated from real hourly market history for {symbol}
           </p>
         </div>
       </CardHeader>
@@ -105,6 +124,9 @@ export function AnalysisSnapshot({ detail }: { detail: CoinDetail }) {
             </div>
             <div className="mt-1 text-xs font-medium">
               {technicals.volatility}
+            </div>
+            <div className="mt-0.5 text-[10px] text-muted-foreground">
+              {technicals.volatilityAnnualized.toFixed(1)}% annualized
             </div>
           </div>
         </div>

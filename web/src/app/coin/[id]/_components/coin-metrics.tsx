@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import type { CoinMetric } from "../_data/coin-detail";
+import type { CoinMetric } from "@/types/coin";
 
 export function CoinMetrics({ metrics }: { metrics: CoinMetric[] }) {
   return (

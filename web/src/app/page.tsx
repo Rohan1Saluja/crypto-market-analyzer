@@ -1,11 +1,16 @@
 import { Badge } from "@/components/ui/badge";
 import { AppHeader } from "@/components/layout/app-header";
-import { marketCoins, marketStats } from "@/data/market";
+import { marketService } from "@/services/market.service";
 import { MarketStatCard } from "./_components/market-stat-card";
 import { MarketTable } from "./_components/market-table";
 import { TopMovers } from "./_components/top-movers";
 
-export default function Home() {
+export default async function Home() {
+  const [marketStats, marketCoins] = await Promise.all([
+    marketService.getOverview(),
+    marketService.getMarkets(),
+  ]);
+
   return (
     <div className="min-h-screen bg-muted/20">
       <AppHeader />
@@ -15,7 +20,7 @@ export default function Home() {
           <div>
             <div className="mb-3 flex items-center gap-2">
               <Badge variant="outline">Market dashboard</Badge>
-              <Badge variant="secondary">Demo data</Badge>
+              <Badge variant="secondary">Live data</Badge>
             </div>
 
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -24,8 +29,7 @@ export default function Home() {
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               A data-first workspace for market discovery, asset research, and
-              technical analysis. This seeded snapshot will be replaced by the
-              FastAPI data layer when we scaffold the backend.
+              technical analysis powered by the Crypto Market Analyzer API.
             </p>
           </div>
 
@@ -35,7 +39,7 @@ export default function Home() {
             </div>
             <div className="mt-1 flex items-center gap-2 text-xs font-medium md:justify-end">
               <span className="size-2 rounded-full bg-emerald-500" />
-              Demo feed online
+              FastAPI feed online
             </div>
           </div>
         </section>
@@ -48,8 +52,21 @@ export default function Home() {
 
         <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
           <MarketTable coins={marketCoins} />
-          <TopMovers />
+          <TopMovers coins={marketCoins} />
         </section>
+
+        <footer className="mt-6 border-t pt-4 text-[10px] text-muted-foreground">
+          Market data provided by{" "}
+          <a
+            href="https://www.coingecko.com/"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            CoinGecko
+          </a>
+          .
+        </footer>
       </main>
     </div>
   );
