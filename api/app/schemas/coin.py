@@ -4,9 +4,16 @@ from app.schemas.base import ApiModel
 from app.schemas.market import MarketCoin
 
 
-class CandlePoint(ApiModel):
-    label: str
+class PricePoint(ApiModel):
+    timestamp: int
     price: float
+    market_cap: float | None = None
+    volume_24h: float | None = None
+
+
+class CoinProfile(ApiModel):
+    coin: MarketCoin
+    description: str | None
 
 
 class CoinMetric(ApiModel):
@@ -22,10 +29,11 @@ class TechnicalSnapshot(ApiModel):
     support: float
     resistance: float
     volatility: Literal["Low", "Moderate", "High"]
+    volatility_annualized: float
+    timeframe: Literal["1h"] = "1h"
 
 
 class CoinDetail(ApiModel):
     coin: MarketCoin
-    description: str
+    description: str | None
     metrics: list[CoinMetric]
-    technicals: TechnicalSnapshot

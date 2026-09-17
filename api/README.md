@@ -2,9 +2,17 @@
 
 FastAPI backend for Crypto Market Analyzer.
 
+Runtime market data comes from CoinGecko. There is no seeded/demo market-data fallback.
+
 ## Local setup
 
-Install [uv](https://docs.astral.sh/uv/) if it is not already available, then:
+Create `api/.env` with your CoinGecko Demo API key:
+
+```env
+CMA_COINGECKO_API_KEY=your-key
+```
+
+Then:
 
 ```bash
 cd api
@@ -26,27 +34,31 @@ uv run ruff check .
 uv run pytest
 ```
 
-## Initial API
+## API
 
 ```text
 GET /health
 GET /api/v1/markets/overview
 GET /api/v1/markets
 GET /api/v1/coins/{coin_id}
-GET /api/v1/coins/{coin_id}/candles?range=7d
+GET /api/v1/coins/{coin_id}/price-history?range=7d
 GET /api/v1/coins/{coin_id}/technicals
 ```
 
-## Architecture
+## Data flow
 
 ```text
-HTTP router
+HTTP route
     ↓
-service
+MarketService
     ↓
-provider
+CoinGeckoMarketProvider
+    ↓
+CoinGecko Demo API
 ```
 
-The first provider is intentionally seeded in-memory data. External market APIs will be added behind
-the provider interface so the HTTP contract and frontend do not need to change when the data source
-changes.
+The backend caches market responses briefly to conserve upstream quota. Technical indicators are
+calculated by this API from CoinGecko hourly historical prices; they are not seeded or randomly
+generated.
+
+Tests use isolated fixtures and mocked HTTP responses. Test fixtures are never used by runtime code.

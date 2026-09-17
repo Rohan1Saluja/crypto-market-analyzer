@@ -1,6 +1,10 @@
 from functools import lru_cache
+from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+API_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
@@ -8,8 +12,13 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    coingecko_api_key: SecretStr
+    coingecko_base_url: str = "https://api.coingecko.com/api/v3"
+    market_cache_ttl_seconds: int = 60
+    history_cache_ttl_seconds: int = 300
+
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=API_ROOT / ".env",
         env_file_encoding="utf-8",
         env_prefix="CMA_",
         extra="ignore",

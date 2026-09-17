@@ -1,219 +1,135 @@
-from typing import Literal
-
-from app.data.market_seed import COIN_DESCRIPTIONS
-from app.providers.base import MarketProvider
-from app.providers.seed import SeedMarketProvider
-from app.schemas.coin import CandlePoint, CoinDetail, CoinMetric, TechnicalSnapshot
+from app.providers.base import HistoryRange, MarketProvider
+from app.schemas.coin import CoinDetail, CoinMetric, PricePoint, TechnicalSnapshot
 from app.schemas.market import MarketCoin, MarketStat
-
-TimeRange = Literal["24h", "7d", "30d"]
+from app.services.technical_service import TechnicalService
 
 
 class MarketService:
-    def __init__(self, provider: MarketProvider) -> None:
+    def __init__(
+        self,
+        *,
+        provider: MarketProvider,
+        technical_service: TechnicalService,
+    ) -> None:
         self._provider = provider
+        self._technical_service = technical_service
 
     def get_market_overview(self) -> list[MarketStat]:
-        return self._provider.list_market_stats()
+        snapshot = self._provider.get_global_market()
+
+        return [
+            MarketStat(
+                label="Global market cap",
+                value=self._format_optional_currency(
+                    snapshot.total_market_cap_usd,
+                ),
+                helper="Across active crypto assets",
+                change=snapshot.market_cap_change_percentage_24h_usd,
+            ),
+            MarketStat(
+                label="24h volume",
+                value=self._format_optional_currency(
+                    snapshot.total_volume_usd,
+                ),
+                helper="Reported global trading volume",
+                change=snapshot.volume_change_percentage_24h_usd,
+            ),
+            MarketStat(
+                label="BTC dominance",
+                value=self._format_optional_percentage(
+                    snapshot.btc_dominance,
+                ),
+                helper="Bitcoin share of total market cap",
+            ),
+            MarketStat(
+                label="Active cryptocurrencies",
+                value=self._format_optional_integer(
+                    snapshot.active_cryptocurrencies,
+                ),
+                helper="Active assets reported by CoinGecko",
+            ),
+        ]
 
     def get_markets(self) -> list[MarketCoin]:
-        return self._provider.list_markets()
+        return self._provider.list_markets(limit=100)
 
     def get_coin_detail(self, coin_id: str) -> CoinDetail | None:
-        coin = self._provider.get_coin(coin_id)
+        profile = self._provider.get_coin_profile(coin_id)
 
-        if coin is None:
+        if profile is None:
             return None
+
+        coin = profile.coin
 
         return CoinDetail(
             coin=coin,
-            description=COIN_DESCRIPTIONS.get(
-                coin.id,
-                f"{coin.name} is a tracked asset in Crypto Market Analyzer.",
-            ),
+            description=profile.description,
             metrics=[
                 CoinMetric(
                     label="Market rank",
-                    value=f"#{coin.rank}",
+                    value=(
+                        f"#{coin.rank}"
+                        if coin.rank is not None
+                        else "Unavailable"
+                    ),
                     helper="By market capitalization",
                 ),
                 CoinMetric(
                     label="Market cap",
-                    value=self._format_compact_currency(coin.market_cap),
+                    value=self._format_optional_currency(
+                        coin.market_cap,
+                    ),
                     helper="Current network valuation",
                 ),
                 CoinMetric(
                     label="24h volume",
-                    value=self._format_compact_currency(coin.volume_24h),
-                    helper="Trading activity",
+                    value=self._format_optional_currency(
+                        coin.volume_24h,
+                    ),
+                    helper="Reported trading activity",
                 ),
                 CoinMetric(
                     label="7d performance",
-                    value=self._format_change(coin.change_7d),
+                    value=self._format_optional_change(
+                        coin.change_7d,
+                    ),
                     helper="Seven-day price change",
                 ),
             ],
-            technicals=self._build_technicals(coin),
         )
 
-    def get_coin_candles(
+    def get_coin_price_history(
         self,
         coin_id: str,
         *,
-        time_range: TimeRange,
-    ) -> list[CandlePoint] | None:
-        coin = self._provider.get_coin(coin_id)
-
-        if coin is None:
-            return None
-
-        amplitude_multipliers: dict[TimeRange, float] = {
-            "24h": 0.55,
-            "7d": 1.0,
-            "30d": 1.8,
-        }
-        labels: dict[TimeRange, list[str]] = {
-            "24h": [
-                "00",
-                "02",
-                "04",
-                "06",
-                "08",
-                "10",
-                "12",
-                "14",
-                "16",
-                "18",
-                "20",
-                "Now",
-            ],
-            "7d": [
-                "Mon",
-                "Tue",
-                "Wed",
-                "Thu",
-                "Fri",
-                "Sat",
-                "Sun",
-                "Mon",
-                "Tue",
-                "Wed",
-                "Thu",
-                "Now",
-            ],
-            "30d": [
-                "W1",
-                "W1",
-                "W1",
-                "W2",
-                "W2",
-                "W2",
-                "W3",
-                "W3",
-                "W3",
-                "W4",
-                "W4",
-                "Now",
-            ],
-        }
-
-        min_value = min(coin.sparkline)
-        max_value = max(coin.sparkline)
-        value_range = max_value - min_value or 1
-        amplitude = max(
-            0.01,
-            min(
-                0.08,
-                abs(coin.change_7d) / 100 + 0.018,
-            ),
+        time_range: HistoryRange,
+    ) -> list[PricePoint] | None:
+        return self._provider.get_price_history(
+            coin_id,
+            time_range=time_range,
         )
-        amplitude *= amplitude_multipliers[time_range]
-
-        generated = [
-            coin.price
-            * (
-                1
-                + (
-                    ((value - min_value) / value_range) - 0.5
-                )
-                * amplitude
-            )
-            for value in coin.sparkline
-        ]
-
-        adjustment = coin.price - generated[-1]
-
-        return [
-            CandlePoint(
-                label=labels[time_range][index],
-                price=max(0, price + adjustment),
-            )
-            for index, price in enumerate(generated)
-        ]
 
     def get_coin_technicals(
         self,
         coin_id: str,
     ) -> TechnicalSnapshot | None:
-        coin = self._provider.get_coin(coin_id)
+        history = self._provider.get_price_history(
+            coin_id,
+            time_range="30d",
+        )
 
-        if coin is None:
+        if history is None:
             return None
 
-        return self._build_technicals(coin)
+        return self._technical_service.calculate(history)
 
     @staticmethod
-    def _build_technicals(
-        coin: MarketCoin,
-    ) -> TechnicalSnapshot:
-        rsi = max(
-            25,
-            min(
-                75,
-                50 + coin.change_7d * 2.2,
-            ),
-        )
-        absolute_move = (
-            abs(coin.change_24h)
-            + abs(coin.change_7d) / 3
-        )
-
-        if coin.change_7d > 3:
-            momentum = "Bullish"
-        elif coin.change_7d < -3:
-            momentum = "Bearish"
-        else:
-            momentum = "Neutral"
-
-        if absolute_move > 7:
-            volatility = "High"
-        elif absolute_move > 3:
-            volatility = "Moderate"
-        else:
-            volatility = "Low"
-
-        move_buffer = max(
-            0.025,
-            absolute_move / 100,
-        )
-
-        return TechnicalSnapshot(
-            momentum=momentum,
-            rsi=round(rsi, 1),
-            macd=(
-                "Bullish"
-                if coin.change_24h >= 0
-                else "Bearish"
-            ),
-            support=coin.price * (1 - move_buffer),
-            resistance=coin.price * (1 + move_buffer),
-            volatility=volatility,
-        )
-
-    @staticmethod
-    def _format_compact_currency(
-        value: float,
+    def _format_optional_currency(
+        value: float | None,
     ) -> str:
+        if value is None:
+            return "Unavailable"
+
         units = [
             (1_000_000_000_000, "T"),
             (1_000_000_000, "B"),
@@ -228,11 +144,29 @@ class MarketService:
         return f"${value:,.2f}"
 
     @staticmethod
-    def _format_change(value: float) -> str:
+    def _format_optional_change(
+        value: float | None,
+    ) -> str:
+        if value is None:
+            return "Unavailable"
+
         prefix = "+" if value >= 0 else ""
         return f"{prefix}{value:.2f}%"
 
+    @staticmethod
+    def _format_optional_percentage(
+        value: float | None,
+    ) -> str:
+        if value is None:
+            return "Unavailable"
 
-market_service = MarketService(
-    provider=SeedMarketProvider(),
-)
+        return f"{value:.1f}%"
+
+    @staticmethod
+    def _format_optional_integer(
+        value: int | None,
+    ) -> str:
+        if value is None:
+            return "Unavailable"
+
+        return f"{value:,}"

@@ -5,14 +5,24 @@ class MarketCoin(ApiModel):
     id: str
     name: str
     symbol: str
-    rank: int
-    price: float
-    change_1h: float
-    change_24h: float
-    change_7d: float
-    market_cap: float
-    volume_24h: float
+    image_url: str | None = None
+    rank: int | None
+    price: float | None
+    change_1h: float | None
+    change_24h: float | None
+    change_7d: float | None
+    market_cap: float | None
+    volume_24h: float | None
     sparkline: list[float]
+
+
+class GlobalMarketSnapshot(ApiModel):
+    total_market_cap_usd: float | None
+    total_volume_usd: float | None
+    btc_dominance: float | None
+    active_cryptocurrencies: int | None
+    market_cap_change_percentage_24h_usd: float | None
+    volume_change_percentage_24h_usd: float | None
 
 
 class MarketStat(ApiModel):
