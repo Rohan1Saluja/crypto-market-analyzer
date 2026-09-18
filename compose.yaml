@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: calyrn
+      POSTGRES_USER: calyrn
+      POSTGRES_PASSWORD: calyrn
+    ports:
+      - "5432:5432"
+    volumes:
+      - calyrn_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U calyrn -d calyrn"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  calyrn_postgres_data:
