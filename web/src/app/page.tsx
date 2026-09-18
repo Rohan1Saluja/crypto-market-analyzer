@@ -14,7 +14,7 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen">
-      <AppHeader />
+      <AppHeader coins={marketCoins} />
 
       <main className="mx-auto w-full max-w-[1480px] px-4 pb-10 pt-8 sm:px-6 lg:px-8 lg:pt-10">
         <section className="instrument-enter relative overflow-hidden pb-8 pt-2">
