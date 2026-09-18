@@ -22,7 +22,7 @@ export function WatchlistStar({
     <button
       type="button"
       disabled={disabled}
-      onClick={() => void toggle(assetId)}
+      onClick={() => void toggle(assetId, assetName)}
       aria-pressed={isWatched}
       aria-label={`${isWatched ? "Remove" : "Add"} ${assetName} ${
         isWatched ? "from" : "to"

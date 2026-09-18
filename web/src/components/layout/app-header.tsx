@@ -70,14 +70,13 @@ export async function AppHeader() {
             </span>
           </Button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 rounded-xl text-muted-foreground hover:bg-white/[0.05] hover:text-foreground"
+          <Link
+            href="/watch"
+            className="flex size-8 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground"
             aria-label="Open Watch"
           >
             <Bookmark className="size-4" />
-          </Button>
+          </Link>
 
           <Button
             variant="ghost"

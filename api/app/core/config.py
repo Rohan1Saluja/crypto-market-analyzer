@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
-    database_url: str = "postgresql+psycopg://calyrn:calyrn@127.0.0.1:5432/calyrn"
+    database_url: str
     database_echo: bool = False
 
     auth0_domain: str
