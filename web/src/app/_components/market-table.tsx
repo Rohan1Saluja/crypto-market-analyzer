@@ -1,12 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Search, Star } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Search, Star } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import type { MarketCoin } from "@/types/market";
 
 type Filter = "all" | "gainers" | "losers";
@@ -40,6 +39,26 @@ function formatCompact(value: number | null) {
   }).format(value)}`;
 }
 
+function AssetMark({ coin }: { coin: MarketCoin }) {
+  if (coin.imageUrl) {
+    return (
+      <Image
+        src={coin.imageUrl}
+        alt=""
+        width={34}
+        height={34}
+        className="size-[34px] rounded-full transition-transform duration-300 group-hover/row:scale-105"
+      />
+    );
+  }
+
+  return (
+    <span className="flex size-[34px] items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] font-mono text-[9px] font-semibold uppercase text-foreground/80 transition-transform duration-300 group-hover/row:scale-105">
+      {coin.symbol.slice(0, 2)}
+    </span>
+  );
+}
+
 function Change({ value }: { value: number | null }) {
   if (value === null) {
     return <span className="text-muted-foreground">—</span>;
@@ -51,10 +70,15 @@ function Change({ value }: { value: number | null }) {
     <span
       className={
         positive
-          ? "font-medium tabular-nums text-emerald-600 dark:text-emerald-400"
-          : "font-medium tabular-nums text-rose-600 dark:text-rose-400"
+          ? "signal-positive inline-flex items-center justify-end gap-0.5 font-mono text-[10px] font-medium tabular-nums"
+          : "signal-negative inline-flex items-center justify-end gap-0.5 font-mono text-[10px] font-medium tabular-nums"
       }
     >
+      {positive ? (
+        <ArrowUpRight className="size-3 opacity-70" />
+      ) : (
+        <ArrowDownRight className="size-3 opacity-70" />
+      )}
       {positive ? "+" : ""}
       {value.toFixed(2)}%
     </span>
@@ -89,8 +113,8 @@ function Sparkline({
       viewBox="0 0 120 40"
       className={
         positive
-          ? "h-8 w-24 text-emerald-500"
-          : "h-8 w-24 text-rose-500"
+          ? "h-8 w-24 text-[var(--positive)] opacity-65 transition-all duration-300 group-hover/row:scale-105 group-hover/row:opacity-100"
+          : "h-8 w-24 text-[var(--negative)] opacity-65 transition-all duration-300 group-hover/row:scale-105 group-hover/row:opacity-100"
       }
       aria-hidden="true"
     >
@@ -98,7 +122,7 @@ function Sparkline({
         points={points}
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="1.7"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -133,54 +157,63 @@ export function MarketTable({ coins }: { coins: MarketCoin[] }) {
   }, [coins, filter, query]);
 
   return (
-    <Card className="gap-0 py-0">
-      <CardHeader className="gap-4 border-b py-4 md:grid-cols-[1fr_auto] md:items-center">
+    <section className="spectral-panel spectral-edge min-w-0 rounded-3xl">
+      <div className="flex flex-col gap-5 border-b border-white/[0.06] px-5 py-5 md:flex-row md:items-end md:justify-between md:px-6">
         <div>
-          <CardTitle>Markets</CardTitle>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Search and scan live market data before drilling into asset-level analysis.
+          <div className="data-label">Market universe</div>
+          <h2 className="mt-1 font-heading text-lg font-medium tracking-[-0.03em]">
+            Live assets
+          </h2>
+          <p className="mt-1.5 max-w-lg text-[11px] leading-5 text-muted-foreground">
+            Scan price, momentum, liquidity and recent structure before opening a deeper asset view.
           </p>
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
+          <label className="group/search relative flex h-9 items-center rounded-xl border border-white/[0.07] bg-black/10 transition-all duration-300 focus-within:border-ring/40 focus-within:bg-white/[0.035] focus-within:ring-2 focus-within:ring-ring/10">
+            <Search className="pointer-events-none absolute left-3 size-3.5 text-muted-foreground transition-colors group-focus-within/search:text-[var(--spectral-glacier)]" />
+            <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search assets"
-              className="w-full pl-8 sm:w-56"
+              className="h-full w-full bg-transparent pl-9 pr-3 text-[11px] text-foreground outline-none placeholder:text-muted-foreground sm:w-56"
+              aria-label="Search market assets"
             />
-          </div>
+          </label>
 
-          <div className="flex items-center rounded-md border bg-muted/30 p-0.5">
+          <div className="flex h-9 items-center rounded-xl border border-white/[0.07] bg-black/10 p-1">
             {filters.map((item) => (
               <Button
                 key={item.value}
                 size="sm"
-                variant={filter === item.value ? "secondary" : "ghost"}
+                variant="ghost"
                 onClick={() => setFilter(item.value)}
+                className={
+                  filter === item.value
+                    ? "h-7 rounded-lg bg-white/[0.08] px-3 text-[10px] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:bg-white/[0.1]"
+                    : "h-7 rounded-lg px-3 text-[10px] text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+                }
               >
                 {item.label}
               </Button>
             ))}
           </div>
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="overflow-x-auto px-0">
+      <div className="overflow-x-auto">
         <table className="w-full min-w-[980px] border-collapse text-xs">
           <thead>
-            <tr className="border-b bg-muted/25 text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
-              <th className="w-10 px-4 py-2.5 text-center font-medium">#</th>
-              <th className="px-3 py-2.5 text-left font-medium">Asset</th>
-              <th className="px-3 py-2.5 text-right font-medium">Price</th>
-              <th className="px-3 py-2.5 text-right font-medium">1h</th>
-              <th className="px-3 py-2.5 text-right font-medium">24h</th>
-              <th className="px-3 py-2.5 text-right font-medium">7d</th>
-              <th className="px-3 py-2.5 text-right font-medium">Market cap</th>
-              <th className="px-3 py-2.5 text-right font-medium">24h volume</th>
-              <th className="px-3 py-2.5 text-right font-medium">Last 7d</th>
+            <tr className="border-b border-white/[0.06] bg-black/[0.08] font-mono text-[8px] uppercase tracking-[0.1em] text-muted-foreground">
+              <th className="w-14 px-4 py-3 text-center font-medium">#</th>
+              <th className="px-3 py-3 text-left font-medium">Asset</th>
+              <th className="px-3 py-3 text-right font-medium">Price</th>
+              <th className="px-3 py-3 text-right font-medium">1h</th>
+              <th className="px-3 py-3 text-right font-medium">24h</th>
+              <th className="px-3 py-3 text-right font-medium">7d</th>
+              <th className="px-3 py-3 text-right font-medium">Market cap</th>
+              <th className="px-3 py-3 text-right font-medium">24h volume</th>
+              <th className="px-5 py-3 text-right font-medium">Last 7d</th>
             </tr>
           </thead>
 
@@ -188,57 +221,59 @@ export function MarketTable({ coins }: { coins: MarketCoin[] }) {
             {visibleCoins.map((coin) => (
               <tr
                 key={coin.id}
-                className="border-b transition-colors last:border-0 hover:bg-muted/20"
+                className="group/row border-b border-white/[0.05] transition-colors duration-300 last:border-0 hover:bg-white/[0.025]"
               >
-                <td className="px-4 py-3 text-center text-muted-foreground">
+                <td className="px-4 py-3.5 text-center text-muted-foreground">
                   <div className="flex items-center justify-center gap-2">
                     <button
                       type="button"
                       aria-label={`Add ${coin.name} to watchlist`}
-                      className="text-muted-foreground transition-colors hover:text-foreground"
+                      className="rounded-md text-muted-foreground/55 transition-all duration-200 hover:scale-110 hover:text-[var(--spectral-peach)] active:scale-90"
                     >
                       <Star className="size-3.5" />
                     </button>
-                    <span className="w-4 tabular-nums">{coin.rank ?? "—"}</span>
+                    <span className="w-4 font-mono text-[9px] tabular-nums">
+                      {coin.rank ?? "—"}
+                    </span>
                   </div>
                 </td>
 
-                <td className="px-3 py-3">
+                <td className="px-3 py-3.5">
                   <Link
                     href={`/coin/${coin.id}`}
-                    className="flex w-fit items-center gap-2.5 rounded-md outline-none transition-opacity hover:opacity-75 focus-visible:ring-2 focus-visible:ring-ring/40"
+                    className="flex w-fit items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   >
-                    <div className="flex size-8 items-center justify-center rounded-full bg-foreground text-[9px] font-bold text-background">
-                      {coin.symbol.slice(0, 2)}
-                    </div>
+                    <AssetMark coin={coin} />
                     <div>
-                      <div className="font-medium">{coin.name}</div>
-                      <div className="text-[10px] uppercase text-muted-foreground">
+                      <div className="font-medium text-foreground/95 transition-colors group-hover/row:text-white">
+                        {coin.name}
+                      </div>
+                      <div className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted-foreground">
                         {coin.symbol}
                       </div>
                     </div>
                   </Link>
                 </td>
 
-                <td className="px-3 py-3 text-right font-medium tabular-nums">
+                <td className="number-display px-3 py-3.5 text-right font-medium">
                   {formatCurrency(coin.price)}
                 </td>
-                <td className="px-3 py-3 text-right">
+                <td className="px-3 py-3.5 text-right">
                   <Change value={coin.change1h} />
                 </td>
-                <td className="px-3 py-3 text-right">
+                <td className="px-3 py-3.5 text-right">
                   <Change value={coin.change24h} />
                 </td>
-                <td className="px-3 py-3 text-right">
+                <td className="px-3 py-3.5 text-right">
                   <Change value={coin.change7d} />
                 </td>
-                <td className="px-3 py-3 text-right tabular-nums">
+                <td className="number-display px-3 py-3.5 text-right text-foreground/78">
                   {formatCompact(coin.marketCap)}
                 </td>
-                <td className="px-3 py-3 text-right tabular-nums">
+                <td className="number-display px-3 py-3.5 text-right text-foreground/68">
                   {formatCompact(coin.volume24h)}
                 </td>
-                <td className="px-3 py-3">
+                <td className="px-5 py-3.5">
                   <div className="flex justify-end">
                     <Sparkline
                       values={coin.sparkline}
@@ -253,15 +288,20 @@ export function MarketTable({ coins }: { coins: MarketCoin[] }) {
               <tr>
                 <td
                   colSpan={9}
-                  className="px-4 py-12 text-center text-muted-foreground"
+                  className="px-4 py-14 text-center text-xs text-muted-foreground"
                 >
-                  No assets match your search.
+                  No assets match your current search.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
-      </CardContent>
-    </Card>
+      </div>
+
+      <div className="flex items-center justify-between border-t border-white/[0.05] px-5 py-3 font-mono text-[8px] uppercase tracking-[0.09em] text-muted-foreground md:px-6">
+        <span>{visibleCoins.length} assets visible</span>
+        <span>Price · Momentum · Liquidity</span>
+      </div>
+    </section>
   );
 }

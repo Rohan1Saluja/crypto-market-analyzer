@@ -1,4 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Activity, Gauge, Waves } from "lucide-react";
+
 import type { TechnicalSnapshot } from "@/types/coin";
 
 function formatPrice(value: number) {
@@ -9,23 +10,16 @@ function formatPrice(value: number) {
   }).format(value);
 }
 
-function Tone({ value }: { value: string }) {
-  const bullish = value === "Bullish";
-  const bearish = value === "Bearish";
+function toneClass(value: string) {
+  if (value === "Bullish") {
+    return "signal-positive";
+  }
 
-  return (
-    <span
-      className={
-        bullish
-          ? "font-medium text-emerald-600 dark:text-emerald-400"
-          : bearish
-            ? "font-medium text-rose-600 dark:text-rose-400"
-            : "font-medium text-foreground"
-      }
-    >
-      {value}
-    </span>
-  );
+  if (value === "Bearish") {
+    return "signal-negative";
+  }
+
+  return "signal-neutral";
 }
 
 export function AnalysisSnapshot({
@@ -37,100 +31,106 @@ export function AnalysisSnapshot({
 }) {
   if (!technicals) {
     return (
-      <Card>
-        <CardHeader className="border-b pb-3">
-          <CardTitle>Technical snapshot</CardTitle>
-        </CardHeader>
-        <CardContent className="text-xs leading-5 text-muted-foreground">
-          There is not enough real historical data available to calculate the
-          technical snapshot for {symbol}.
-        </CardContent>
-      </Card>
+      <aside className="spectral-panel spectral-edge rounded-3xl px-5 py-5 sm:px-6">
+        <div className="data-label">Technical lens</div>
+        <h2 className="mt-1 font-heading text-base font-medium tracking-[-0.025em]">
+          Signal snapshot
+        </h2>
+        <p className="mt-4 text-xs leading-6 text-muted-foreground">
+          There is not enough historical data available to calculate the technical snapshot for {symbol}.
+        </p>
+      </aside>
     );
   }
 
   const rsiPosition = `${Math.max(0, Math.min(100, technicals.rsi))}%`;
 
   return (
-    <Card>
-      <CardHeader className="border-b pb-3">
-        <div>
-          <CardTitle>Technical snapshot</CardTitle>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Calculated from real hourly market history for {symbol}
-          </p>
+    <aside className="spectral-panel spectral-edge rounded-3xl">
+      <div className="border-b border-white/[0.06] px-5 py-5 sm:px-6">
+        <div className="data-label">Technical lens</div>
+        <div className="mt-1 flex items-center gap-2">
+          <h2 className="font-heading text-base font-medium tracking-[-0.025em]">
+            Signal snapshot
+          </h2>
+          <Gauge className="size-3.5 text-[var(--spectral-violet)]" />
         </div>
-      </CardHeader>
+        <p className="mt-1.5 text-[10px] leading-5 text-muted-foreground">
+          Calculated from real hourly history for {symbol}.
+        </p>
+      </div>
 
-      <CardContent className="space-y-5">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-lg border bg-muted/20 p-3">
-            <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-              Momentum
+      <div className="px-5 py-5 sm:px-6">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="data-label text-[8px]!">Momentum</span>
+              <Activity className="size-3 text-muted-foreground" />
             </div>
-            <div className="mt-2 text-sm">
-              <Tone value={technicals.momentum} />
+            <div className={`mt-3 font-heading text-sm font-medium ${toneClass(technicals.momentum)}`}>
+              {technicals.momentum}
             </div>
           </div>
 
-          <div className="rounded-lg border bg-muted/20 p-3">
-            <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-              MACD bias
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="data-label text-[8px]!">MACD bias</span>
+              <Waves className="size-3 text-muted-foreground" />
             </div>
-            <div className="mt-2 text-sm">
-              <Tone value={technicals.macd} />
+            <div className={`mt-3 font-heading text-sm font-medium ${toneClass(technicals.macd)}`}>
+              {technicals.macd}
             </div>
           </div>
         </div>
 
-        <div>
-          <div className="mb-2 flex items-center justify-between text-xs">
-            <span className="font-medium">RSI</span>
-            <span className="font-mono tabular-nums">{technicals.rsi}</span>
+        <div className="mt-6">
+          <div className="mb-3 flex items-end justify-between">
+            <div>
+              <div className="data-label">Relative strength</div>
+              <div className="mt-1 font-heading text-sm font-medium">RSI</div>
+            </div>
+            <span className="number-display font-mono text-sm text-foreground">
+              {technicals.rsi}
+            </span>
           </div>
-          <div className="relative h-2 rounded-full bg-muted">
+
+          <div className="relative h-2 rounded-full bg-[linear-gradient(90deg,var(--negative)_0%,oklch(0.45_0.04_292)_50%,var(--positive)_100%)] opacity-80">
             <div
-              className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-foreground"
+              className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--background)] bg-foreground shadow-[0_0_0_3px_rgba(255,255,255,0.06)] transition-[left] duration-500"
               style={{ left: rsiPosition }}
             />
           </div>
-          <div className="mt-1.5 flex justify-between text-[9px] uppercase text-muted-foreground">
+          <div className="mt-2 flex justify-between font-mono text-[8px] uppercase tracking-[0.07em] text-muted-foreground">
             <span>Oversold</span>
             <span>Neutral</span>
             <span>Overbought</span>
           </div>
         </div>
 
-        <div className="grid gap-3 border-t pt-4 sm:grid-cols-3">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-              Support
-            </div>
-            <div className="mt-1 text-xs font-medium tabular-nums">
+        <div className="mt-6 grid gap-4 border-t border-white/[0.06] pt-5 sm:grid-cols-3 xl:grid-cols-1">
+          <div className="flex items-end justify-between gap-3">
+            <div className="data-label text-[8px]!">Support</div>
+            <div className="number-display text-xs font-medium">
               {formatPrice(technicals.support)}
             </div>
           </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-              Resistance
-            </div>
-            <div className="mt-1 text-xs font-medium tabular-nums">
+          <div className="flex items-end justify-between gap-3">
+            <div className="data-label text-[8px]!">Resistance</div>
+            <div className="number-display text-xs font-medium">
               {formatPrice(technicals.resistance)}
             </div>
           </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-              Volatility
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <div className="data-label text-[8px]!">Volatility</div>
+              <div className="mt-1 font-mono text-[8px] text-muted-foreground">
+                {technicals.volatilityAnnualized.toFixed(1)}% annualized
+              </div>
             </div>
-            <div className="mt-1 text-xs font-medium">
-              {technicals.volatility}
-            </div>
-            <div className="mt-0.5 text-[10px] text-muted-foreground">
-              {technicals.volatilityAnnualized.toFixed(1)}% annualized
-            </div>
+            <div className="text-xs font-medium">{technicals.volatility}</div>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </aside>
   );
 }
