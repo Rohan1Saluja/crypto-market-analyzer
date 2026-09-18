@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@auth0/nextjs-auth0": "^4.30.0",
     "@base-ui/react": "^1.8.0",
     "@hugeicons/core-free-icons": "^4.3.3",
     "@hugeicons/react": "^1.1.10",

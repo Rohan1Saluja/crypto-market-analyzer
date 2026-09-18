@@ -1,8 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowDownRight, ArrowLeft, ArrowUpRight, Star } from "lucide-react";
+import { ArrowDownRight, ArrowLeft, ArrowUpRight } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { WatchlistStar } from "@/components/watchlist/watchlist-star";
 import type { CoinDetail } from "@/types/coin";
 
 function formatPrice(value: number | null) {
@@ -114,14 +114,11 @@ export function CoinHeader({ detail }: { detail: CoinDetail }) {
               )}
             </div>
 
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-10 rounded-xl border-white/[0.08] bg-white/[0.025] text-muted-foreground transition-transform hover:scale-105 hover:bg-white/[0.06] hover:text-[var(--spectral-peach)] active:scale-95"
-              aria-label={`Add ${coin.name} to watchlist`}
-            >
-              <Star className="size-4" />
-            </Button>
+            <WatchlistStar
+              assetId={coin.id}
+              assetName={coin.name}
+              size="detail"
+            />
           </div>
         </div>
       </div>

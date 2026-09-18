@@ -1,12 +1,16 @@
 import Link from "next/link";
-import { Bookmark, Search, Sparkles } from "lucide-react";
+import { Bookmark, LogIn, LogOut, Search, Sparkles } from "lucide-react";
 
 import { CalyrnMark } from "@/components/brand/calyrn-mark";
 import { Button } from "@/components/ui/button";
+import { auth0 } from "@/lib/auth0";
 
 const navItems = ["Markets", "Research", "Exposure", "Signals"];
 
-export function AppHeader() {
+export async function AppHeader() {
+  const session = await auth0.getSession();
+  const accountLabel = session?.user.name ?? session?.user.email ?? "Account";
+
   return (
     <header className="sticky top-0 z-50 px-3 pt-3 sm:px-5">
       <div className="calyrn-panel mx-auto flex h-14 w-full max-w-[1480px] items-center gap-4 rounded-2xl px-3 sm:px-4">
@@ -83,6 +87,25 @@ export function AppHeader() {
           >
             <Sparkles className="size-4" />
           </Button>
+
+          {session ? (
+            <a
+              href="/auth/logout"
+              className="hidden h-8 max-w-36 items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.025] px-2.5 text-[10px] text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground sm:flex"
+              title={`Signed in as ${accountLabel}`}
+            >
+              <LogOut className="size-3.5" />
+              <span className="truncate">{accountLabel}</span>
+            </a>
+          ) : (
+            <a
+              href="/auth/login"
+              className="flex h-8 items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.035] px-2.5 text-[10px] text-foreground transition-colors hover:bg-white/[0.07]"
+            >
+              <LogIn className="size-3.5" />
+              <span>Sign in</span>
+            </a>
+          )}
         </div>
       </div>
     </header>

@@ -3,9 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Search, Star } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { WatchlistStar } from "@/components/watchlist/watchlist-star";
 import type { MarketCoin } from "@/types/market";
 
 type Filter = "all" | "gainers" | "losers";
@@ -225,13 +226,10 @@ export function MarketTable({ coins }: { coins: MarketCoin[] }) {
               >
                 <td className="px-4 py-3.5 text-center text-muted-foreground">
                   <div className="flex items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      aria-label={`Add ${coin.name} to watchlist`}
-                      className="rounded-md text-muted-foreground/55 transition-all duration-200 hover:scale-110 hover:text-[var(--spectral-peach)] active:scale-90"
-                    >
-                      <Star className="size-3.5" />
-                    </button>
+                    <WatchlistStar
+                      assetId={coin.id}
+                      assetName={coin.name}
+                    />
                     <span className="w-4 font-mono text-[9px] tabular-nums">
                       {coin.rank ?? "—"}
                     </span>
