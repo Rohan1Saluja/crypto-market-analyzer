@@ -1,5 +1,13 @@
-from app.providers.base import HistoryRange, MarketProvider
-from app.schemas.coin import CoinDetail, CoinMetric, PricePoint, TechnicalSnapshot
+from app.core.exceptions import MarketDataProviderError
+from app.providers.base import HistoryRange, MarketProvider, NewsProvider, ResearchProvider
+from app.schemas.coin import (
+    CoinDetail,
+    CoinMetric,
+    CoinNewsItem,
+    CoinResearch,
+    PricePoint,
+    TechnicalSnapshot,
+)
 from app.schemas.market import MarketCoin, MarketStat
 from app.services.technical_service import TechnicalService
 
@@ -10,9 +18,13 @@ class MarketService:
         *,
         provider: MarketProvider,
         technical_service: TechnicalService,
+        research_provider: ResearchProvider | None = None,
+        news_provider: NewsProvider | None = None,
     ) -> None:
         self._provider = provider
         self._technical_service = technical_service
+        self._research_provider = research_provider
+        self._news_provider = news_provider
 
     def get_market_overview(self) -> list[MarketStat]:
         snapshot = self._provider.get_global_market()
@@ -122,6 +134,30 @@ class MarketService:
             return None
 
         return self._technical_service.calculate(history)
+
+    def get_coin_research(self, coin_id: str) -> CoinResearch | None:
+        if self._research_provider is None:
+            profile = self._provider.get_coin_profile(coin_id)
+            return CoinResearch() if profile is not None else None
+
+        return self._research_provider.get_coin_research(coin_id)
+
+    def get_coin_news(self, coin_id: str) -> list[CoinNewsItem] | None:
+        profile = self._provider.get_coin_profile(coin_id)
+
+        if profile is None:
+            return None
+
+        if self._news_provider is None:
+            return []
+
+        try:
+            return self._news_provider.get_coin_news(
+                name=profile.coin.name,
+                symbol=profile.coin.symbol,
+            )
+        except MarketDataProviderError:
+            return []
 
     @staticmethod
     def _format_optional_currency(

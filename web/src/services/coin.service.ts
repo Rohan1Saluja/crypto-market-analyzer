@@ -1,6 +1,8 @@
 import { ApiError, apiGet } from "@/lib/api-client";
 import type {
   CoinDetail,
+  CoinNewsItem,
+  CoinResearch,
   PriceHistoryRange,
   PricePoint,
   TechnicalSnapshot,
@@ -51,6 +53,33 @@ export const coinService = {
         (error.status === 404 || error.status === 422)
       ) {
         return null;
+      }
+
+      throw error;
+    }
+  },
+
+  async getResearch(id: string): Promise<CoinResearch | null> {
+    try {
+      return await apiGet<CoinResearch>(`${coinPath(id)}/research`);
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        [404, 429, 502, 503].includes(error.status)
+      ) {
+        return null;
+      }
+
+      throw error;
+    }
+  },
+
+  async getNews(id: string): Promise<CoinNewsItem[]> {
+    try {
+      return await apiGet<CoinNewsItem[]>(`${coinPath(id)}/news`);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return [];
       }
 
       throw error;

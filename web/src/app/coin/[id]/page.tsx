@@ -7,6 +7,7 @@ import { AnalysisSnapshot } from "./_components/analysis-snapshot";
 import { CoinHeader } from "./_components/coin-header";
 import { CoinMetrics } from "./_components/coin-metrics";
 import { PriceChart } from "./_components/price-chart";
+import { ResearchLayer } from "./_components/research-layer";
 
 type CoinPageProps = {
   params: Promise<{ id: string }>;
@@ -40,9 +41,11 @@ export default async function CoinPage({ params }: CoinPageProps) {
     notFound();
   }
 
-  const [priceHistory, technicals] = await Promise.all([
+  const [priceHistory, technicals, research, news] = await Promise.all([
     coinService.getPriceHistory(id, "7d"),
     coinService.getTechnicals(id),
+    coinService.getResearch(id),
+    coinService.getNews(id),
   ]);
 
   return (
@@ -61,39 +64,12 @@ export default async function CoinPage({ params }: CoinPageProps) {
           <AnalysisSnapshot symbol={detail.coin.symbol} technicals={technicals} />
         </section>
 
-        <section className="spectral-panel spectral-edge mt-5 rounded-3xl px-5 py-5 sm:px-6 sm:py-6">
-          <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10">
-            <div>
-              <div className="data-label">Research layer</div>
-              <h2 className="mt-1 font-heading text-base font-medium tracking-[-0.025em]">
-                About {detail.coin.name}
-              </h2>
-              <div className="mt-4 flex flex-wrap gap-1.5 lg:flex-col lg:items-start">
-                {["Overview", "Technicals", "Fundamentals", "News", "Sentiment"].map(
-                  (item, index) => (
-                    <span
-                      key={item}
-                      className={
-                        index === 0
-                          ? "rounded-lg border border-white/[0.08] bg-white/[0.07] px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-foreground"
-                          : "rounded-lg px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted-foreground"
-                      }
-                    >
-                      {item}
-                    </span>
-                  ),
-                )}
-              </div>
-            </div>
-
-            <div className="border-t border-white/[0.06] pt-5 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
-              <p className="max-w-4xl text-sm leading-7 text-foreground/74">
-                {detail.description ??
-                  "Description unavailable from the market-data provider."}
-              </p>
-            </div>
-          </div>
-        </section>
+        <ResearchLayer
+          detail={detail}
+          research={research}
+          technicals={technicals}
+          news={news}
+        />
 
         <footer className="mt-8 flex flex-col gap-2 border-t border-white/[0.06] pt-4 font-mono text-[9px] uppercase tracking-[0.08em] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>CMA / Asset research</span>
