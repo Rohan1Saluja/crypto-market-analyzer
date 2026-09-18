@@ -29,7 +29,7 @@ export async function generateMetadata({
     title: `${detail.coin.name} (${detail.coin.symbol})`,
     description:
       detail.description ??
-      `${detail.coin.name} market data and technical analysis.`,
+      `${detail.coin.name} market context, technical analysis, fundamentals, news, and sentiment on Calyrn.`,
   };
 }
 
@@ -72,7 +72,7 @@ export default async function CoinPage({ params }: CoinPageProps) {
         />
 
         <footer className="mt-8 flex flex-col gap-2 border-t border-white/[0.06] pt-4 font-mono text-[9px] uppercase tracking-[0.08em] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <span>CMA / Asset research</span>
+          <span>Calyrn / Asset research</span>
           <span>
             Market data by{" "}
             <a
