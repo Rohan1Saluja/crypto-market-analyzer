@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Geist_Mono, Manrope, Space_Grotesk } from "next/font/google";
+import { Toaster } from "sonner";
 
 import { WatchlistProvider } from "@/components/watchlist/watchlist-provider";
 import { cn } from "@/lib/utils";
@@ -103,6 +104,7 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-background font-sans text-foreground">
         <WatchlistProvider>{children}</WatchlistProvider>
+        <Toaster theme="dark" position="bottom-right" closeButton />
       </body>
     </html>
   );

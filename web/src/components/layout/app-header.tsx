@@ -1,14 +1,19 @@
 import Link from "next/link";
-import { Bookmark, LogIn, LogOut, Search, Sparkles } from "lucide-react";
+import { Bookmark, LogIn, LogOut, Sparkles } from "lucide-react";
 
 import { CalyrnMark } from "@/components/brand/calyrn-mark";
+import { PrimaryNav } from "@/components/layout/primary-nav";
+import { GlobalSearch } from "@/components/search/global-search";
 import { Button } from "@/components/ui/button";
 import { auth0 } from "@/lib/auth0";
+import { marketService } from "@/services/market.service";
+import type { MarketCoin } from "@/types/market";
 
-const navItems = ["Markets", "Research", "Exposure", "Signals"];
-
-export async function AppHeader() {
-  const session = await auth0.getSession();
+export async function AppHeader({ coins }: { coins?: MarketCoin[] }) {
+  const [session, searchCoins] = await Promise.all([
+    auth0.getSession(),
+    coins ? Promise.resolve(coins) : marketService.getMarkets(),
+  ]);
   const accountLabel = session?.user.name ?? session?.user.email ?? "Account";
 
   return (
@@ -33,23 +38,7 @@ export async function AppHeader() {
           </span>
         </Link>
 
-        <nav
-          className="hidden items-center rounded-xl border border-white/[0.06] bg-white/[0.022] p-1 md:flex"
-          aria-label="Primary navigation"
-        >
-          {navItems.map((item, index) => (
-            <span
-              key={item}
-              className={
-                index === 0
-                  ? "rounded-lg bg-white/[0.075] px-3 py-1.5 text-[11px] font-medium text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-                  : "rounded-lg px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-              }
-            >
-              {item}
-            </span>
-          ))}
-        </nav>
+        <PrimaryNav />
 
         <div className="ml-auto flex items-center gap-2">
           <div className="hidden items-center gap-2 pr-1 lg:flex">
@@ -59,31 +48,23 @@ export async function AppHeader() {
             </span>
           </div>
 
-          <Button
-            variant="outline"
-            className="calyrn-edge hidden h-8 gap-2 rounded-xl border-white/[0.08] bg-white/[0.022] px-3 text-muted-foreground hover:bg-white/[0.05] hover:text-foreground sm:flex"
-          >
-            <Search className="size-3.5" />
-            <span>Search Calyrn</span>
-            <span className="ml-2 rounded-md border border-white/[0.08] bg-black/10 px-1.5 font-mono text-[9px] text-muted-foreground">
-              /
-            </span>
-          </Button>
+          <GlobalSearch coins={searchCoins} />
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 rounded-xl text-muted-foreground hover:bg-white/[0.05] hover:text-foreground"
+          <Link
+            href="/watch"
+            className="flex size-8 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             aria-label="Open Watch"
           >
             <Bookmark className="size-4" />
-          </Button>
+          </Link>
 
           <Button
             variant="ghost"
             size="icon"
-            className="size-8 rounded-xl text-[var(--calyrn-ice)] hover:bg-white/[0.05]"
-            aria-label="Open Calyrn brief"
+            disabled
+            title="Brief arrives with Signals"
+            className="size-8 rounded-xl text-[var(--calyrn-ice)]"
+            aria-label="Calyrn Brief coming with Signals"
           >
             <Sparkles className="size-4" />
           </Button>
