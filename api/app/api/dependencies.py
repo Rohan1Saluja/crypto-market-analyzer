@@ -1,8 +1,10 @@
 from typing import Annotated
 
 from fastapi import Depends
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.db.session import get_db_session
 from app.providers.coingecko import CoinGeckoMarketProvider
 from app.providers.news import GoogleNewsProvider
 from app.providers.research import CoinGeckoResearchProvider
@@ -45,3 +47,4 @@ def close_market_provider() -> None:
 
 
 MarketServiceDep = Annotated[MarketService, Depends(get_market_service)]
+SessionDep = Annotated[Session, Depends(get_db_session)]
