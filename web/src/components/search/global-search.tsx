@@ -82,11 +82,16 @@ export function GlobalSearch({ coins }: { coins: MarketCoin[] }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="calyrn-edge flex size-8 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.022] text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:h-8 sm:w-auto sm:gap-2 sm:px-3"
+        className="calyrn-edge flex size-8 items-center justify-center rounded-xl border 
+        border-white/[0.08] bg-white/[0.022] text-muted-foreground transition-colors hover:bg-white/[0.05] 
+        hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 
+        sm:h-8 sm:w-auto sm:gap-2 sm:px-3"
         aria-label="Search Calyrn"
       >
         <Search className="size-3.5" />
-        <span className="hidden sm:inline">Search Calyrn</span>
+        <span className="hidden sm:inline text-xxs md:!text-xs">
+          Search Calyrn
+        </span>
         <span className="ml-1 hidden rounded-md border border-white/[0.08] bg-black/10 px-1.5 font-mono text-[9px] text-muted-foreground lg:inline">
           /
         </span>
