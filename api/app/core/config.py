@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://calyrn:calyrn@127.0.0.1:5432/calyrn"
     database_echo: bool = False
 
+    auth0_domain: str
+    auth0_audience: str
+    auth0_client_id: str
+
     coingecko_api_key: SecretStr
     coingecko_base_url: str = "https://api.coingecko.com/api/v3"
     market_cache_ttl_seconds: int = 60
@@ -36,6 +40,10 @@ class Settings(BaseSettings):
             for origin in self.cors_origins.split(",")
             if origin.strip()
         ]
+
+    @property
+    def auth0_issuer(self) -> str:
+        return f"https://{self.auth0_domain.removeprefix('https://').rstrip('/')}/"
 
 
 @lru_cache
