@@ -21,15 +21,61 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://cma-rs.vercel.app";
+
+const title = "CMA | Crypto Market Analyzer";
+const description =
+  "Research-first crypto market intelligence for prices, momentum, liquidity, market context, and deeper asset analysis.";
+
+const socialImageAlt =
+  "CMA | Read the market, not the noise. Research-first crypto market intelligence.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
-    default: "CMA — Crypto Market Analyzer",
+    default: title,
     template: "%s | CMA",
   },
-  description: "A market-intelligence workspace for understanding crypto markets.",
+  description,
+  applicationName: title,
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "/",
+    siteName: title,
+    title: "CMA — Read the market, not the noise.",
+    description,
+    images: [
+      {
+        url: "/previews/opengraph-image.png",
+        width: 1200,
+        height: 630,
+        alt: socialImageAlt,
+      },
+    ],
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: "CMA — Read the market, not the noise.",
+    description,
+    images: [
+      {
+        url: "/previews/twitter-image.png",
+        alt: socialImageAlt,
+      },
+    ],
+  },
+
+  category: "finance",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: ReactNode }>) {
   return (
     <html
       lang="en"
