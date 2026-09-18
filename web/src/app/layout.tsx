@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Geist_Mono, Manrope, Space_Grotesk } from "next/font/google";
 
+import { WatchlistProvider } from "@/components/watchlist/watchlist-provider";
 import { cn } from "@/lib/utils";
 
 import "./globals.css";
@@ -101,7 +102,7 @@ export default function RootLayout({
       )}
     >
       <body className="min-h-full bg-background font-sans text-foreground">
-        {children}
+        <WatchlistProvider>{children}</WatchlistProvider>
       </body>
     </html>
   );
