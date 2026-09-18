@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     coingecko_base_url: str = "https://api.coingecko.com/api/v3"
     market_cache_ttl_seconds: int = 60
     history_cache_ttl_seconds: int = 300
+    research_cache_ttl_seconds: int = 300
+    news_cache_ttl_seconds: int = 300
 
     model_config = SettingsConfigDict(
         env_file=API_ROOT / ".env",

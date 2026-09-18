@@ -1,0 +1,1688 @@
+diff -ruN a/api/.env.example b/api/.env.example
+--- a/api/.env.example	2026-09-18 01:14:27.466895954 +0000
++++ b/api/.env.example	2026-09-18 01:14:43.686291745 +0000
+@@ -9,3 +9,5 @@
+ # Keep upstream usage comfortably below free-tier limits.
+ CMA_MARKET_CACHE_TTL_SECONDS=60
+ CMA_HISTORY_CACHE_TTL_SECONDS=300
++CMA_RESEARCH_CACHE_TTL_SECONDS=300
++CMA_NEWS_CACHE_TTL_SECONDS=300
+diff -ruN a/api/app/api/dependencies.py b/api/app/api/dependencies.py
+--- a/api/app/api/dependencies.py	2026-09-18 01:14:27.470670425 +0000
++++ b/api/app/api/dependencies.py	2026-09-18 01:14:43.710328524 +0000
+@@ -4,6 +4,8 @@
+ 
+ from app.core.config import get_settings
+ from app.providers.coingecko import CoinGeckoMarketProvider
++from app.providers.news import GoogleNewsProvider
++from app.providers.research import CoinGeckoResearchProvider
+ from app.services.market_service import MarketService
+ from app.services.technical_service import TechnicalService
+ 
+@@ -15,10 +17,20 @@
+     market_cache_ttl_seconds=settings.market_cache_ttl_seconds,
+     history_cache_ttl_seconds=settings.history_cache_ttl_seconds,
+ )
++research_provider = CoinGeckoResearchProvider(
++    api_key=settings.coingecko_api_key.get_secret_value(),
++    base_url=settings.coingecko_base_url,
++    cache_ttl_seconds=settings.research_cache_ttl_seconds,
++)
++news_provider = GoogleNewsProvider(
++    cache_ttl_seconds=settings.news_cache_ttl_seconds,
++)
+ 
+ market_service = MarketService(
+     provider=market_provider,
+     technical_service=TechnicalService(),
++    research_provider=research_provider,
++    news_provider=news_provider,
+ )
+ 
+ 
+@@ -28,6 +40,8 @@
+ 
+ def close_market_provider() -> None:
+     market_provider.close()
++    research_provider.close()
++    news_provider.close()
+ 
+ 
+ MarketServiceDep = Annotated[MarketService, Depends(get_market_service)]
+diff -ruN a/api/app/api/routes/coins.py b/api/app/api/routes/coins.py
+--- a/api/app/api/routes/coins.py	2026-09-18 01:14:27.471562782 +0000
++++ b/api/app/api/routes/coins.py	2026-09-18 01:14:43.713661564 +0000
+@@ -3,7 +3,13 @@
+ from fastapi import APIRouter, HTTPException, Query, status
+ 
+ from app.api.dependencies import MarketServiceDep
+-from app.schemas.coin import CoinDetail, PricePoint, TechnicalSnapshot
++from app.schemas.coin import (
++    CoinDetail,
++    CoinNewsItem,
++    CoinResearch,
++    PricePoint,
++    TechnicalSnapshot,
++)
+ 
+ router = APIRouter(prefix="/coins", tags=["coins"])
+ 
+@@ -61,3 +67,35 @@
+         )
+ 
+     return technicals
++
++
++@router.get("/{coin_id}/research", response_model=CoinResearch)
++def get_coin_research(
++    coin_id: str,
++    service: MarketServiceDep,
++) -> CoinResearch:
++    research = service.get_coin_research(coin_id)
++
++    if research is None:
++        raise HTTPException(
++            status_code=status.HTTP_404_NOT_FOUND,
++            detail=f"Unknown coin: {coin_id}",
++        )
++
++    return research
++
++
++@router.get("/{coin_id}/news", response_model=list[CoinNewsItem])
++def get_coin_news(
++    coin_id: str,
++    service: MarketServiceDep,
++) -> list[CoinNewsItem]:
++    news = service.get_coin_news(coin_id)
++
++    if news is None:
++        raise HTTPException(
++            status_code=status.HTTP_404_NOT_FOUND,
++            detail=f"Unknown coin: {coin_id}",
++        )
++
++    return news
+diff -ruN a/api/app/core/config.py b/api/app/core/config.py
+--- a/api/app/core/config.py	2026-09-18 01:14:27.469626724 +0000
++++ b/api/app/core/config.py	2026-09-18 01:14:43.707154264 +0000
+@@ -16,6 +16,8 @@
+     coingecko_base_url: str = "https://api.coingecko.com/api/v3"
+     market_cache_ttl_seconds: int = 60
+     history_cache_ttl_seconds: int = 300
++    research_cache_ttl_seconds: int = 300
++    news_cache_ttl_seconds: int = 300
+ 
+     model_config = SettingsConfigDict(
+         env_file=API_ROOT / ".env",
+diff -ruN a/api/app/providers/base.py b/api/app/providers/base.py
+--- a/api/app/providers/base.py	2026-09-18 01:14:27.468739941 +0000
++++ b/api/app/providers/base.py	2026-09-18 01:14:43.692842940 +0000
+@@ -1,6 +1,6 @@
+ from typing import Literal, Protocol
+ 
+-from app.schemas.coin import CoinProfile, PricePoint
++from app.schemas.coin import CoinNewsItem, CoinProfile, CoinResearch, PricePoint
+ from app.schemas.market import GlobalMarketSnapshot, MarketCoin
+ 
+ HistoryRange = Literal["24h", "7d", "30d"]
+@@ -25,4 +25,26 @@
+         ...
+ 
+     def close(self) -> None:
++        ...
++
++
++class ResearchProvider(Protocol):
++    def get_coin_research(self, coin_id: str) -> CoinResearch | None:
++        ...
++
++    def close(self) -> None:
++        ...
++
++
++class NewsProvider(Protocol):
++    def get_coin_news(
++        self,
++        *,
++        name: str,
++        symbol: str,
++        limit: int = 6,
++    ) -> list[CoinNewsItem]:
++        ...
++
++    def close(self) -> None:
+         ...
+diff -ruN a/api/app/providers/news.py b/api/app/providers/news.py
+--- a/api/app/providers/news.py	1970-01-01 00:00:00.000000000 +0000
++++ b/api/app/providers/news.py	2026-09-18 01:15:16.940949489 +0000
+@@ -0,0 +1,122 @@
++from datetime import timezone
++from email.utils import parsedate_to_datetime
++from xml.etree import ElementTree
++
++import httpx
++
++from app.core.cache import TtlCache
++from app.core.exceptions import MarketDataProviderError
++from app.schemas.coin import CoinNewsItem
++
++
++class GoogleNewsProvider:
++    def __init__(
++        self,
++        *,
++        cache_ttl_seconds: int,
++        transport: httpx.BaseTransport | None = None,
++    ) -> None:
++        self._cache_ttl_seconds = cache_ttl_seconds
++        self._cache = TtlCache()
++        self._client = httpx.Client(
++            base_url="https://news.google.com/rss/",
++            headers={
++                "accept": "application/rss+xml, application/xml, text/xml",
++                "user-agent": "CryptoMarketAnalyzer/0.1",
++            },
++            timeout=httpx.Timeout(8.0),
++            follow_redirects=True,
++            transport=transport,
++        )
++
++    def close(self) -> None:
++        self._client.close()
++
++    def get_coin_news(
++        self,
++        *,
++        name: str,
++        symbol: str,
++        limit: int = 6,
++    ) -> list[CoinNewsItem]:
++        query = f'"{name}" cryptocurrency {symbol}'
++        cache_key = f"news:{query.lower()}:{limit}"
++
++        def loader() -> list[CoinNewsItem]:
++            try:
++                response = self._client.get(
++                    "search",
++                    params={
++                        "q": query,
++                        "hl": "en-US",
++                        "gl": "US",
++                        "ceid": "US:en",
++                    },
++                )
++                response.raise_for_status()
++            except httpx.HTTPError as error:
++                raise MarketDataProviderError("News feed request failed.") from error
++
++            try:
++                root = ElementTree.fromstring(response.text)
++            except ElementTree.ParseError as error:
++                raise MarketDataProviderError("News feed returned invalid XML.") from error
++
++            items: list[CoinNewsItem] = []
++
++            for item in root.findall("./channel/item"):
++                title = self._element_text(item.find("title"))
++                link = self._element_text(item.find("link"))
++                source = self._element_text(item.find("source")) or "Google News"
++
++                if not title or not link or not link.startswith(("https://", "http://")):
++                    continue
++
++                suffix = f" - {source}"
++                if title.endswith(suffix):
++                    title = title[: -len(suffix)]
++
++                items.append(
++                    CoinNewsItem(
++                        title=title,
++                        source=source,
++                        url=link,
++                        published_at=self._published_at(
++                            self._element_text(item.find("pubDate")),
++                        ),
++                    )
++                )
++
++                if len(items) >= limit:
++                    break
++
++            return items
++
++        return self._cache.get_or_load(
++            cache_key,
++            ttl_seconds=self._cache_ttl_seconds,
++            loader=loader,
++        )
++
++    @staticmethod
++    def _element_text(element: ElementTree.Element | None) -> str | None:
++        if element is None or not element.text:
++            return None
++
++        value = element.text.strip()
++        return value or None
++
++    @staticmethod
++    def _published_at(value: str | None) -> str | None:
++        if value is None:
++            return None
++
++        try:
++            parsed = parsedate_to_datetime(value)
++        except (TypeError, ValueError):
++            return None
++
++        if parsed.tzinfo is None:
++            parsed = parsed.replace(tzinfo=timezone.utc)
++
++        return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+diff -ruN a/api/app/providers/research.py b/api/app/providers/research.py
+--- a/api/app/providers/research.py	1970-01-01 00:00:00.000000000 +0000
++++ b/api/app/providers/research.py	2026-09-18 01:14:43.700178152 +0000
+@@ -0,0 +1,231 @@
++from typing import Any
++from urllib.parse import urlencode
++
++import httpx
++
++from app.core.cache import TtlCache
++from app.core.exceptions import MarketDataProviderError, MarketDataRateLimitError
++from app.schemas.coin import CoinFundamentals, CoinResearch, CoinSentiment
++
++
++class CoinGeckoResearchProvider:
++    def __init__(
++        self,
++        *,
++        api_key: str,
++        base_url: str,
++        cache_ttl_seconds: int,
++        transport: httpx.BaseTransport | None = None,
++    ) -> None:
++        self._cache_ttl_seconds = cache_ttl_seconds
++        self._cache = TtlCache()
++        self._client = httpx.Client(
++            base_url=base_url.rstrip("/") + "/",
++            headers={
++                "accept": "application/json",
++                "x-cg-demo-api-key": api_key,
++            },
++            timeout=httpx.Timeout(10.0),
++            transport=transport,
++        )
++
++    def close(self) -> None:
++        self._client.close()
++
++    def get_coin_research(self, coin_id: str) -> CoinResearch | None:
++        params = {
++            "localization": "false",
++            "tickers": "false",
++            "market_data": "true",
++            "community_data": "true",
++            "developer_data": "true",
++            "sparkline": "false",
++        }
++        payload = self._get_json(
++            f"coins/{coin_id}",
++            params=params,
++            allow_not_found=True,
++        )
++
++        if payload is None:
++            return None
++
++        data = self._require_dict(payload)
++        market_data = self._optional_dict(data.get("market_data"))
++        community_data = self._optional_dict(data.get("community_data"))
++        developer_data = self._optional_dict(data.get("developer_data"))
++        links = self._optional_dict(data.get("links"))
++
++        fundamentals = CoinFundamentals(
++            circulating_supply=self._number(market_data.get("circulating_supply")),
++            total_supply=self._number(market_data.get("total_supply")),
++            max_supply=self._number(market_data.get("max_supply")),
++            fully_diluted_valuation=self._nested_number(
++                market_data,
++                "fully_diluted_valuation",
++                "usd",
++            ),
++            all_time_high=self._nested_number(market_data, "ath", "usd"),
++            all_time_high_change_percentage=self._nested_number(
++                market_data,
++                "ath_change_percentage",
++                "usd",
++            ),
++            all_time_high_date=self._nested_string(
++                market_data,
++                "ath_date",
++                "usd",
++            ),
++            all_time_low=self._nested_number(market_data, "atl", "usd"),
++            all_time_low_change_percentage=self._nested_number(
++                market_data,
++                "atl_change_percentage",
++                "usd",
++            ),
++            all_time_low_date=self._nested_string(
++                market_data,
++                "atl_date",
++                "usd",
++            ),
++            genesis_date=self._string(data.get("genesis_date")),
++            hashing_algorithm=self._string(data.get("hashing_algorithm")),
++            categories=self._string_list(data.get("categories"), limit=6),
++            homepage_url=self._first_url(links.get("homepage")),
++            blockchain_explorer_url=self._first_url(
++                links.get("blockchain_site"),
++            ),
++        )
++        sentiment = CoinSentiment(
++            votes_up_percentage=self._number(
++                data.get("sentiment_votes_up_percentage"),
++            ),
++            votes_down_percentage=self._number(
++                data.get("sentiment_votes_down_percentage"),
++            ),
++            watchlist_users=self._integer(data.get("watchlist_portfolio_users")),
++            reddit_subscribers=self._integer(
++                community_data.get("reddit_subscribers"),
++            ),
++            github_stars=self._integer(developer_data.get("stars")),
++            github_forks=self._integer(developer_data.get("forks")),
++            github_commits_4_weeks=self._integer(
++                developer_data.get("commit_count_4_weeks"),
++            ),
++        )
++
++        return CoinResearch(
++            fundamentals=fundamentals,
++            sentiment=sentiment,
++        )
++
++    def _get_json(
++        self,
++        path: str,
++        *,
++        params: dict[str, str],
++        allow_not_found: bool = False,
++    ) -> Any:
++        key = f"research:{path}?{urlencode(sorted(params.items()))}"
++
++        def loader() -> Any:
++            try:
++                response = self._client.get(path, params=params)
++            except httpx.TimeoutException as error:
++                raise MarketDataProviderError("CoinGecko request timed out.") from error
++            except httpx.HTTPError as error:
++                raise MarketDataProviderError("CoinGecko request failed.") from error
++
++            if response.status_code == 404 and allow_not_found:
++                return None
++
++            if response.status_code == 429:
++                raise MarketDataRateLimitError("CoinGecko rate limit reached.")
++
++            if response.is_error:
++                raise MarketDataProviderError(
++                    f"CoinGecko returned HTTP {response.status_code}."
++                )
++
++            try:
++                return response.json()
++            except ValueError as error:
++                raise MarketDataProviderError(
++                    "CoinGecko returned invalid JSON."
++                ) from error
++
++        return self._cache.get_or_load(
++            key,
++            ttl_seconds=self._cache_ttl_seconds,
++            loader=loader,
++        )
++
++    @classmethod
++    def _nested_number(
++        cls,
++        data: dict[str, Any],
++        container_key: str,
++        value_key: str,
++    ) -> float | None:
++        container = data.get(container_key)
++        if not isinstance(container, dict):
++            return None
++        return cls._number(container.get(value_key))
++
++    @classmethod
++    def _nested_string(
++        cls,
++        data: dict[str, Any],
++        container_key: str,
++        value_key: str,
++    ) -> str | None:
++        container = data.get(container_key)
++        if not isinstance(container, dict):
++            return None
++        return cls._string(container.get(value_key))
++
++    @staticmethod
++    def _optional_dict(value: object) -> dict[str, Any]:
++        return value if isinstance(value, dict) else {}
++
++    @staticmethod
++    def _require_dict(value: object) -> dict[str, Any]:
++        if not isinstance(value, dict):
++            raise MarketDataProviderError("CoinGecko returned an invalid research payload.")
++        return value
++
++    @staticmethod
++    def _number(value: object) -> float | None:
++        if isinstance(value, bool) or not isinstance(value, (int, float)):
++            return None
++        return float(value)
++
++    @staticmethod
++    def _integer(value: object) -> int | None:
++        if isinstance(value, bool) or not isinstance(value, (int, float)):
++            return None
++        return int(value)
++
++    @staticmethod
++    def _string(value: object) -> str | None:
++        if not isinstance(value, str):
++            return None
++        clean = value.strip()
++        return clean or None
++
++    @classmethod
++    def _string_list(cls, value: object, *, limit: int) -> list[str]:
++        if not isinstance(value, list):
++            return []
++        return [item for item in (cls._string(entry) for entry in value) if item][:limit]
++
++    @classmethod
++    def _first_url(cls, value: object) -> str | None:
++        if not isinstance(value, list):
++            return None
++
++        for entry in value:
++            candidate = cls._string(entry)
++            if candidate and candidate.startswith(("https://", "http://")):
++                return candidate
++
++        return None
+diff -ruN a/api/app/schemas/coin.py b/api/app/schemas/coin.py
+--- a/api/app/schemas/coin.py	2026-09-18 01:14:27.467817624 +0000
++++ b/api/app/schemas/coin.py	2026-09-18 01:14:43.689479836 +0000
+@@ -1,5 +1,7 @@
+ from typing import Literal
+ 
++from pydantic import Field
++
+ from app.schemas.base import ApiModel
+ from app.schemas.market import MarketCoin
+ 
+@@ -33,6 +35,46 @@
+     timeframe: Literal["1h"] = "1h"
+ 
+ 
++class CoinFundamentals(ApiModel):
++    circulating_supply: float | None = None
++    total_supply: float | None = None
++    max_supply: float | None = None
++    fully_diluted_valuation: float | None = None
++    all_time_high: float | None = None
++    all_time_high_change_percentage: float | None = None
++    all_time_high_date: str | None = None
++    all_time_low: float | None = None
++    all_time_low_change_percentage: float | None = None
++    all_time_low_date: str | None = None
++    genesis_date: str | None = None
++    hashing_algorithm: str | None = None
++    categories: list[str] = Field(default_factory=list)
++    homepage_url: str | None = None
++    blockchain_explorer_url: str | None = None
++
++
++class CoinSentiment(ApiModel):
++    votes_up_percentage: float | None = None
++    votes_down_percentage: float | None = None
++    watchlist_users: int | None = None
++    reddit_subscribers: int | None = None
++    github_stars: int | None = None
++    github_forks: int | None = None
++    github_commits_4_weeks: int | None = None
++
++
++class CoinResearch(ApiModel):
++    fundamentals: CoinFundamentals = Field(default_factory=CoinFundamentals)
++    sentiment: CoinSentiment = Field(default_factory=CoinSentiment)
++
++
++class CoinNewsItem(ApiModel):
++    title: str
++    source: str
++    url: str
++    published_at: str | None = None
++
++
+ class CoinDetail(ApiModel):
+     coin: MarketCoin
+     description: str | None
+diff -ruN a/api/app/services/market_service.py b/api/app/services/market_service.py
+--- a/api/app/services/market_service.py	2026-09-18 01:14:43.683111280 +0000
++++ b/api/app/services/market_service.py	2026-09-18 01:14:43.703658083 +0000
+@@ -1,5 +1,13 @@
+-from app.providers.base import HistoryRange, MarketProvider
+-from app.schemas.coin import CoinDetail, CoinMetric, PricePoint, TechnicalSnapshot
++from app.core.exceptions import MarketDataProviderError
++from app.providers.base import HistoryRange, MarketProvider, NewsProvider, ResearchProvider
++from app.schemas.coin import (
++    CoinDetail,
++    CoinMetric,
++    CoinNewsItem,
++    CoinResearch,
++    PricePoint,
++    TechnicalSnapshot,
++)
+ from app.schemas.market import MarketCoin, MarketStat
+ from app.services.technical_service import TechnicalService
+ 
+@@ -10,9 +18,13 @@
+         *,
+         provider: MarketProvider,
+         technical_service: TechnicalService,
++        research_provider: ResearchProvider | None = None,
++        news_provider: NewsProvider | None = None,
+     ) -> None:
+         self._provider = provider
+         self._technical_service = technical_service
++        self._research_provider = research_provider
++        self._news_provider = news_provider
+ 
+     def get_market_overview(self) -> list[MarketStat]:
+         snapshot = self._provider.get_global_market()
+@@ -123,6 +135,30 @@
+ 
+         return self._technical_service.calculate(history)
+ 
++    def get_coin_research(self, coin_id: str) -> CoinResearch | None:
++        if self._research_provider is None:
++            profile = self._provider.get_coin_profile(coin_id)
++            return CoinResearch() if profile is not None else None
++
++        return self._research_provider.get_coin_research(coin_id)
++
++    def get_coin_news(self, coin_id: str) -> list[CoinNewsItem] | None:
++        profile = self._provider.get_coin_profile(coin_id)
++
++        if profile is None:
++            return None
++
++        if self._news_provider is None:
++            return []
++
++        try:
++            return self._news_provider.get_coin_news(
++                name=profile.coin.name,
++                symbol=profile.coin.symbol,
++            )
++        except MarketDataProviderError:
++            return []
++
+     @staticmethod
+     def _format_optional_currency(
+         value: float | None,
+diff -ruN a/api/tests/test_coins.py b/api/tests/test_coins.py
+--- a/api/tests/test_coins.py	2026-09-18 01:14:27.472473105 +0000
++++ b/api/tests/test_coins.py	2026-09-18 01:14:43.716898491 +0000
+@@ -40,7 +40,30 @@
+     assert payload["timeframe"] == "1h"
+ 
+ 
++def test_coin_research_has_stable_fallback_shape(client: TestClient) -> None:
++    response = client.get("/api/v1/coins/bitcoin/research")
++
++    assert response.status_code == 200
++    payload = response.json()
++
++    assert payload["fundamentals"]["categories"] == []
++    assert payload["sentiment"]["votesUpPercentage"] is None
++
++
++def test_coin_news_has_stable_fallback_shape(client: TestClient) -> None:
++    response = client.get("/api/v1/coins/bitcoin/news")
++
++    assert response.status_code == 200
++    assert response.json() == []
++
++
+ def test_unknown_coin_returns_404(client: TestClient) -> None:
+     response = client.get("/api/v1/coins/not-a-coin")
+ 
+     assert response.status_code == 404
++
++
++def test_unknown_coin_research_returns_404(client: TestClient) -> None:
++    response = client.get("/api/v1/coins/not-a-coin/research")
++
++    assert response.status_code == 404
+diff -ruN a/api/tests/test_news_provider.py b/api/tests/test_news_provider.py
+--- a/api/tests/test_news_provider.py	1970-01-01 00:00:00.000000000 +0000
++++ b/api/tests/test_news_provider.py	2026-09-18 01:14:43.720233249 +0000
+@@ -0,0 +1,37 @@
++import httpx
++
++from app.providers.news import GoogleNewsProvider
++
++
++def test_google_news_feed_is_mapped_to_coin_news() -> None:
++    rss = """<?xml version="1.0" encoding="UTF-8"?>
++    <rss>
++      <channel>
++        <item>
++          <title>Bitcoin moves higher - Reuters</title>
++          <link>https://news.google.com/articles/example</link>
++          <pubDate>Fri, 18 Sep 2026 00:00:00 GMT</pubDate>
++          <source>Reuters</source>
++        </item>
++      </channel>
++    </rss>
++    """
++
++    def handler(request: httpx.Request) -> httpx.Response:
++        assert "Bitcoin" in request.url.params["q"]
++        assert request.url.params["ceid"] == "US:en"
++        return httpx.Response(200, text=rss)
++
++    provider = GoogleNewsProvider(
++        cache_ttl_seconds=300,
++        transport=httpx.MockTransport(handler),
++    )
++
++    try:
++        news = provider.get_coin_news(name="Bitcoin", symbol="BTC")
++    finally:
++        provider.close()
++
++    assert news[0].title == "Bitcoin moves higher"
++    assert news[0].source == "Reuters"
++    assert news[0].published_at == "2026-09-18T00:00:00Z"
+diff -ruN a/api/tests/test_research_provider.py b/api/tests/test_research_provider.py
+--- a/api/tests/test_research_provider.py	1970-01-01 00:00:00.000000000 +0000
++++ b/api/tests/test_research_provider.py	2026-09-18 01:14:43.723563169 +0000
+@@ -0,0 +1,79 @@
++import httpx
++
++from app.providers.research import CoinGeckoResearchProvider
++
++
++def test_coin_research_is_mapped_from_coingecko_payload() -> None:
++    def handler(request: httpx.Request) -> httpx.Response:
++        assert request.headers["x-cg-demo-api-key"] == "demo-key"
++        assert request.url.params["community_data"] == "true"
++        assert request.url.params["developer_data"] == "true"
++
++        return httpx.Response(
++            200,
++            json={
++                "market_data": {
++                    "circulating_supply": 19_900_000,
++                    "total_supply": 19_900_000,
++                    "max_supply": 21_000_000,
++                    "fully_diluted_valuation": {"usd": 1_500_000_000_000},
++                    "ath": {"usd": 120_000},
++                    "ath_change_percentage": {"usd": -8.2},
++                    "ath_date": {"usd": "2026-08-01T00:00:00.000Z"},
++                    "atl": {"usd": 67.81},
++                    "atl_change_percentage": {"usd": 160_000},
++                    "atl_date": {"usd": "2013-07-06T00:00:00.000Z"},
++                },
++                "community_data": {"reddit_subscribers": 7_000_000},
++                "developer_data": {
++                    "stars": 85_000,
++                    "forks": 40_000,
++                    "commit_count_4_weeks": 180,
++                },
++                "sentiment_votes_up_percentage": 78.3,
++                "sentiment_votes_down_percentage": 21.7,
++                "watchlist_portfolio_users": 2_500_000,
++                "genesis_date": "2009-01-03",
++                "hashing_algorithm": "SHA-256",
++                "categories": ["Layer 1", "Proof of Work"],
++                "links": {
++                    "homepage": ["https://bitcoin.org"],
++                    "blockchain_site": ["https://mempool.space"],
++                },
++            },
++        )
++
++    provider = CoinGeckoResearchProvider(
++        api_key="demo-key",
++        base_url="https://api.coingecko.test/api/v3",
++        cache_ttl_seconds=300,
++        transport=httpx.MockTransport(handler),
++    )
++
++    try:
++        research = provider.get_coin_research("bitcoin")
++    finally:
++        provider.close()
++
++    assert research is not None
++    assert research.fundamentals.max_supply == 21_000_000
++    assert research.fundamentals.hashing_algorithm == "SHA-256"
++    assert research.fundamentals.homepage_url == "https://bitcoin.org"
++    assert research.sentiment.votes_up_percentage == 78.3
++    assert research.sentiment.github_commits_4_weeks == 180
++
++
++def test_unknown_coin_research_returns_none() -> None:
++    provider = CoinGeckoResearchProvider(
++        api_key="demo-key",
++        base_url="https://api.coingecko.test/api/v3",
++        cache_ttl_seconds=300,
++        transport=httpx.MockTransport(lambda _: httpx.Response(404)),
++    )
++
++    try:
++        research = provider.get_coin_research("unknown")
++    finally:
++        provider.close()
++
++    assert research is None
+diff -ruN a/web/src/app/coin/[id]/_components/research-layer.tsx b/web/src/app/coin/[id]/_components/research-layer.tsx
+--- a/web/src/app/coin/[id]/_components/research-layer.tsx	1970-01-01 00:00:00.000000000 +0000
++++ b/web/src/app/coin/[id]/_components/research-layer.tsx	2026-09-18 01:14:43.736506654 +0000
+@@ -0,0 +1,724 @@
++"use client";
++
++import { useState } from "react";
++import {
++  Activity,
++  ArrowUpRight,
++  BookOpen,
++  Code2,
++  Database,
++  ExternalLink,
++  Gauge,
++  GitFork,
++  Newspaper,
++  Radio,
++  Star,
++  Users,
++} from "lucide-react";
++
++import type {
++  CoinDetail,
++  CoinFundamentals,
++  CoinNewsItem,
++  CoinResearch,
++  CoinSentiment,
++  TechnicalSnapshot,
++} from "@/types/coin";
++
++type ResearchTab =
++  | "overview"
++  | "technicals"
++  | "fundamentals"
++  | "news"
++  | "sentiment";
++
++const tabs = [
++  { id: "overview", label: "Overview", icon: BookOpen },
++  { id: "technicals", label: "Technicals", icon: Gauge },
++  { id: "fundamentals", label: "Fundamentals", icon: Database },
++  { id: "news", label: "News", icon: Newspaper },
++  { id: "sentiment", label: "Sentiment", icon: Users },
++] as const;
++
++function formatPrice(value: number | null) {
++  if (value === null) {
++    return "Unavailable";
++  }
++
++  return new Intl.NumberFormat("en-US", {
++    style: "currency",
++    currency: "USD",
++    maximumFractionDigits: value < 1 ? 4 : value < 100 ? 2 : 0,
++  }).format(value);
++}
++
++function formatCompact(value: number | null) {
++  if (value === null) {
++    return "Unavailable";
++  }
++
++  return new Intl.NumberFormat("en-US", {
++    notation: "compact",
++    maximumFractionDigits: 2,
++  }).format(value);
++}
++
++function formatPercent(value: number | null, signed = false) {
++  if (value === null) {
++    return "Unavailable";
++  }
++
++  const prefix = signed && value > 0 ? "+" : "";
++  return `${prefix}${value.toFixed(1)}%`;
++}
++
++function formatDate(value: string | null) {
++  if (!value) {
++    return "Unavailable";
++  }
++
++  const date = new Date(value);
++  if (Number.isNaN(date.getTime())) {
++    return value;
++  }
++
++  return new Intl.DateTimeFormat("en-US", {
++    year: "numeric",
++    month: "short",
++    day: "numeric",
++    timeZone: "UTC",
++  }).format(date);
++}
++
++function signalClass(value: string) {
++  if (value === "Bullish") {
++    return "signal-positive";
++  }
++
++  if (value === "Bearish") {
++    return "signal-negative";
++  }
++
++  return "signal-neutral";
++}
++
++function metricTone(value: number | null) {
++  if (value === null || value === 0) {
++    return "text-foreground/70";
++  }
++
++  return value > 0 ? "signal-positive" : "signal-negative";
++}
++
++function hasFundamentals(fundamentals: CoinFundamentals | undefined) {
++  if (!fundamentals) {
++    return false;
++  }
++
++  return Boolean(
++    fundamentals.circulatingSupply !== null ||
++      fundamentals.totalSupply !== null ||
++      fundamentals.maxSupply !== null ||
++      fundamentals.fullyDilutedValuation !== null ||
++      fundamentals.allTimeHigh !== null ||
++      fundamentals.allTimeLow !== null ||
++      fundamentals.genesisDate ||
++      fundamentals.hashingAlgorithm ||
++      fundamentals.categories.length,
++  );
++}
++
++function OverviewPanel({
++  detail,
++  research,
++  technicals,
++  news,
++}: {
++  detail: CoinDetail;
++  research: CoinResearch | null;
++  technicals: TechnicalSnapshot | null;
++  news: CoinNewsItem[];
++}) {
++  const fundamentals = research?.fundamentals;
++
++  return (
++    <div className="animate-in fade-in slide-in-from-bottom-1 duration-300">
++      <div className="data-label">Asset brief</div>
++      <p className="mt-3 max-w-4xl text-sm leading-7 text-foreground/76">
++        {detail.description ??
++          "Description unavailable from the market-data provider."}
++      </p>
++
++      {fundamentals?.categories.length ? (
++        <div className="mt-5 flex flex-wrap gap-2">
++          {fundamentals.categories.map((category) => (
++            <span
++              key={category}
++              className="rounded-full border border-white/[0.07] bg-white/[0.035] px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.07em] text-foreground/65"
++            >
++              {category}
++            </span>
++          ))}
++        </div>
++      ) : null}
++
++      <div className="mt-7 grid gap-3 sm:grid-cols-3">
++        <CoverageCard
++          label="Technical model"
++          value={technicals ? "Live" : "Limited"}
++          helper={technicals ? "30d hourly signal set" : "Insufficient history"}
++        />
++        <CoverageCard
++          label="Research profile"
++          value={hasFundamentals(fundamentals) ? "Enriched" : "Basic"}
++          helper="Supply, milestones and network metadata"
++        />
++        <CoverageCard
++          label="News pulse"
++          value={news.length ? `${news.length} stories` : "Quiet"}
++          helper="Recent indexed coverage"
++        />
++      </div>
++
++      {(fundamentals?.homepageUrl || fundamentals?.blockchainExplorerUrl) && (
++        <div className="mt-6 flex flex-wrap gap-2 border-t border-white/[0.06] pt-5">
++          {fundamentals.homepageUrl ? (
++            <ExternalResearchLink href={fundamentals.homepageUrl} label="Official site" />
++          ) : null}
++          {fundamentals.blockchainExplorerUrl ? (
++            <ExternalResearchLink
++              href={fundamentals.blockchainExplorerUrl}
++              label="Block explorer"
++            />
++          ) : null}
++        </div>
++      )}
++    </div>
++  );
++}
++
++function CoverageCard({
++  label,
++  value,
++  helper,
++}: {
++  label: string;
++  value: string;
++  helper: string;
++}) {
++  return (
++    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-4">
++      <div className="data-label text-[8px]!">{label}</div>
++      <div className="mt-2 font-heading text-sm font-medium">{value}</div>
++      <p className="mt-1 text-[10px] leading-5 text-muted-foreground">{helper}</p>
++    </div>
++  );
++}
++
++function ExternalResearchLink({ href, label }: { href: string; label: string }) {
++  return (
++    <a
++      href={href}
++      target="_blank"
++      rel="noreferrer"
++      className="group inline-flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.035] px-3 py-2 font-mono text-[9px] uppercase tracking-[0.08em] text-foreground/70 transition-colors hover:border-white/[0.13] hover:bg-white/[0.055] hover:text-foreground"
++    >
++      {label}
++      <ExternalLink className="size-3 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
++    </a>
++  );
++}
++
++function TechnicalsPanel({
++  symbol,
++  technicals,
++}: {
++  symbol: string;
++  technicals: TechnicalSnapshot | null;
++}) {
++  if (!technicals) {
++    return (
++      <EmptyResearchState
++        title="Technical model unavailable"
++        body={`There is not enough historical data to calculate the deeper ${symbol} technical view right now.`}
++      />
++    );
++  }
++
++  const rsiPosition = `${Math.max(0, Math.min(100, technicals.rsi))}%`;
++  const rsiState =
++    technicals.rsi >= 70
++      ? "Overbought zone"
++      : technicals.rsi <= 30
++        ? "Oversold zone"
++        : "Neutral range";
++
++  return (
++    <div className="animate-in fade-in slide-in-from-bottom-1 duration-300">
++      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
++        <ResearchMetric label="Momentum" value={technicals.momentum} tone={signalClass(technicals.momentum)} />
++        <ResearchMetric label="MACD bias" value={technicals.macd} tone={signalClass(technicals.macd)} />
++        <ResearchMetric label="Volatility" value={technicals.volatility} helper={`${technicals.volatilityAnnualized.toFixed(1)}% annualized`} />
++        <ResearchMetric label="Timeframe" value={technicals.timeframe} helper="Calculated from hourly history" />
++      </div>
++
++      <div className="mt-7 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:p-5">
++        <div className="flex items-end justify-between gap-4">
++          <div>
++            <div className="data-label">Relative strength index</div>
++            <div className="mt-1 text-xs text-muted-foreground">{rsiState}</div>
++          </div>
++          <div className="number-display font-heading text-xl font-medium">
++            {technicals.rsi.toFixed(1)}
++          </div>
++        </div>
++        <div className="mt-5 relative h-2 rounded-full bg-[linear-gradient(90deg,var(--negative)_0%,oklch(0.45_0.04_292)_50%,var(--positive)_100%)] opacity-80">
++          <div
++            className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--background)] bg-foreground shadow-[0_0_0_3px_rgba(255,255,255,0.06)] transition-[left] duration-500"
++            style={{ left: rsiPosition }}
++          />
++        </div>
++        <div className="mt-2 flex justify-between font-mono text-[8px] uppercase tracking-[0.07em] text-muted-foreground">
++          <span>Oversold</span>
++          <span>Neutral</span>
++          <span>Overbought</span>
++        </div>
++      </div>
++
++      <div className="mt-4 grid gap-3 sm:grid-cols-2">
++        <ResearchMetric label="Support zone" value={formatPrice(technicals.support)} />
++        <ResearchMetric label="Resistance zone" value={formatPrice(technicals.resistance)} />
++      </div>
++    </div>
++  );
++}
++
++function ResearchMetric({
++  label,
++  value,
++  helper,
++  tone = "text-foreground",
++}: {
++  label: string;
++  value: string;
++  helper?: string;
++  tone?: string;
++}) {
++  return (
++    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-4">
++      <div className="data-label text-[8px]!">{label}</div>
++      <div className={`mt-2 font-heading text-sm font-medium ${tone}`}>{value}</div>
++      {helper ? (
++        <div className="mt-1 font-mono text-[8px] uppercase tracking-[0.06em] text-muted-foreground">
++          {helper}
++        </div>
++      ) : null}
++    </div>
++  );
++}
++
++function FundamentalsPanel({
++  fundamentals,
++}: {
++  fundamentals: CoinFundamentals | undefined;
++}) {
++  if (!hasFundamentals(fundamentals) || !fundamentals) {
++    return (
++      <EmptyResearchState
++        title="Fundamentals are limited"
++        body="The upstream market-data profile does not currently expose enough supply or network metadata for this asset."
++      />
++    );
++  }
++
++  const supplyProgress =
++    fundamentals.circulatingSupply !== null &&
++    fundamentals.maxSupply !== null &&
++    fundamentals.maxSupply > 0
++      ? Math.min(100, (fundamentals.circulatingSupply / fundamentals.maxSupply) * 100)
++      : null;
++
++  return (
++    <div className="animate-in fade-in slide-in-from-bottom-1 duration-300">
++      <div className="data-label">Supply structure</div>
++      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
++        <ResearchMetric label="Circulating" value={formatCompact(fundamentals.circulatingSupply)} />
++        <ResearchMetric label="Total supply" value={formatCompact(fundamentals.totalSupply)} />
++        <ResearchMetric label="Max supply" value={formatCompact(fundamentals.maxSupply)} />
++        <ResearchMetric label="Fully diluted value" value={formatPrice(fundamentals.fullyDilutedValuation)} />
++      </div>
++
++      {supplyProgress !== null ? (
++        <div className="mt-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
++          <div className="flex items-center justify-between gap-3">
++            <span className="data-label text-[8px]!">Circulating vs max supply</span>
++            <span className="number-display font-mono text-[10px] text-foreground/70">
++              {supplyProgress.toFixed(1)}%
++            </span>
++          </div>
++          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
++            <div
++              className="h-full rounded-full bg-[linear-gradient(90deg,var(--spectral-violet),var(--spectral-glacier))] transition-[width] duration-500"
++              style={{ width: `${supplyProgress}%` }}
++            />
++          </div>
++        </div>
++      ) : null}
++
++      <div className="mt-7 grid gap-5 lg:grid-cols-2">
++        <div>
++          <div className="data-label">Price milestones</div>
++          <div className="mt-3 space-y-3">
++            <MilestoneRow
++              label="All-time high"
++              value={formatPrice(fundamentals.allTimeHigh)}
++              change={formatPercent(fundamentals.allTimeHighChangePercentage, true)}
++              date={formatDate(fundamentals.allTimeHighDate)}
++            />
++            <MilestoneRow
++              label="All-time low"
++              value={formatPrice(fundamentals.allTimeLow)}
++              change={formatPercent(fundamentals.allTimeLowChangePercentage, true)}
++              date={formatDate(fundamentals.allTimeLowDate)}
++            />
++          </div>
++        </div>
++
++        <div>
++          <div className="data-label">Network profile</div>
++          <div className="mt-3 divide-y divide-white/[0.06] rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4">
++            <FactRow label="Genesis" value={formatDate(fundamentals.genesisDate)} />
++            <FactRow label="Consensus / hash" value={fundamentals.hashingAlgorithm ?? "Unavailable"} />
++            <FactRow label="Categories" value={fundamentals.categories.slice(0, 3).join(" · ") || "Unavailable"} />
++          </div>
++        </div>
++      </div>
++    </div>
++  );
++}
++
++function MilestoneRow({
++  label,
++  value,
++  change,
++  date,
++}: {
++  label: string;
++  value: string;
++  change: string;
++  date: string;
++}) {
++  return (
++    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
++      <div className="flex items-start justify-between gap-4">
++        <div>
++          <div className="data-label text-[8px]!">{label}</div>
++          <div className="mt-2 number-display font-heading text-base font-medium">{value}</div>
++        </div>
++        <span className="font-mono text-[9px] text-foreground/60">{change}</span>
++      </div>
++      <div className="mt-3 font-mono text-[8px] uppercase tracking-[0.06em] text-muted-foreground">
++        {date}
++      </div>
++    </div>
++  );
++}
++
++function FactRow({ label, value }: { label: string; value: string }) {
++  return (
++    <div className="flex items-start justify-between gap-5 py-3.5">
++      <span className="data-label text-[8px]!">{label}</span>
++      <span className="max-w-[65%] text-right text-xs leading-5 text-foreground/75">{value}</span>
++    </div>
++  );
++}
++
++function NewsPanel({
++  name,
++  news,
++}: {
++  name: string;
++  news: CoinNewsItem[];
++}) {
++  if (!news.length) {
++    const newsSearch = `https://news.google.com/search?q=${encodeURIComponent(`${name} cryptocurrency`)}`;
++
++    return (
++      <div className="animate-in fade-in slide-in-from-bottom-1 duration-300">
++        <EmptyResearchState
++          title="No recent stories returned"
++          body="The live news feed is temporarily quiet or unavailable. You can still open a broader news search for this asset."
++        />
++        <a
++          href={newsSearch}
++          target="_blank"
++          rel="noreferrer"
++          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.035] px-3 py-2 font-mono text-[9px] uppercase tracking-[0.08em] text-foreground/70 transition-colors hover:bg-white/[0.055] hover:text-foreground"
++        >
++          Open news search
++          <ArrowUpRight className="size-3" />
++        </a>
++      </div>
++    );
++  }
++
++  return (
++    <div className="animate-in fade-in slide-in-from-bottom-1 duration-300">
++      <div className="flex items-end justify-between gap-4">
++        <div>
++          <div className="data-label">Recent coverage</div>
++          <p className="mt-1 text-[10px] leading-5 text-muted-foreground">
++            Indexed headlines open at their original publisher via Google News.
++          </p>
++        </div>
++        <Radio className="size-3.5 text-[var(--spectral-glacier)]" />
++      </div>
++
++      <div className="mt-4 divide-y divide-white/[0.06] rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 sm:px-5">
++        {news.map((item) => (
++          <a
++            key={`${item.url}-${item.title}`}
++            href={item.url}
++            target="_blank"
++            rel="noreferrer"
++            className="group flex gap-4 py-4 first:pt-4 last:pb-4"
++          >
++            <div className="min-w-0 flex-1">
++              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[8px] uppercase tracking-[0.07em] text-muted-foreground">
++                <span>{item.source}</span>
++                {item.publishedAt ? <span>· {formatDate(item.publishedAt)}</span> : null}
++              </div>
++              <h3 className="mt-1.5 text-sm leading-6 text-foreground/82 transition-colors group-hover:text-foreground">
++                {item.title}
++              </h3>
++            </div>
++            <ArrowUpRight className="mt-1 size-3.5 shrink-0 text-muted-foreground transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
++          </a>
++        ))}
++      </div>
++    </div>
++  );
++}
++
++function SentimentPanel({
++  sentiment,
++  detail,
++  technicals,
++}: {
++  sentiment: CoinSentiment | undefined;
++  detail: CoinDetail;
++  technicals: TechnicalSnapshot | null;
++}) {
++  const up = sentiment?.votesUpPercentage ?? null;
++  const down = sentiment?.votesDownPercentage ?? null;
++  const hasVotes = up !== null || down !== null;
++
++  return (
++    <div className="animate-in fade-in slide-in-from-bottom-1 duration-300">
++      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
++        <div>
++          <div className="data-label">Community vote</div>
++          <div className="mt-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:p-5">
++            {hasVotes ? (
++              <>
++                <div className="flex items-end justify-between gap-4">
++                  <div>
++                    <div className="font-heading text-2xl font-medium signal-positive">
++                      {formatPercent(up)}
++                    </div>
++                    <div className="mt-1 data-label text-[8px]!">Positive</div>
++                  </div>
++                  <div className="text-right">
++                    <div className="font-heading text-2xl font-medium signal-negative">
++                      {formatPercent(down)}
++                    </div>
++                    <div className="mt-1 data-label text-[8px]!">Negative</div>
++                  </div>
++                </div>
++                <div className="mt-5 flex h-2 overflow-hidden rounded-full bg-white/[0.05]">
++                  <div
++                    className="h-full bg-[var(--positive)] transition-[width] duration-500"
++                    style={{ width: `${Math.max(0, Math.min(100, up ?? 0))}%` }}
++                  />
++                  <div className="h-full flex-1 bg-[var(--negative)] opacity-75" />
++                </div>
++                <p className="mt-3 text-[10px] leading-5 text-muted-foreground">
++                  Crowd voting is provider-reported and should be read as participation data, not a trading signal.
++                </p>
++              </>
++            ) : (
++              <p className="text-xs leading-6 text-muted-foreground">
++                CoinGecko does not currently publish a crowd-vote sample for this asset.
++              </p>
++            )}
++          </div>
++
++          <div className="mt-5 data-label">Market pulse</div>
++          <div className="mt-3 grid gap-3 sm:grid-cols-3">
++            <ResearchMetric
++              label="24h price"
++              value={formatPercent(detail.coin.change24h, true)}
++              tone={metricTone(detail.coin.change24h)}
++            />
++            <ResearchMetric
++              label="7d price"
++              value={formatPercent(detail.coin.change7d, true)}
++              tone={metricTone(detail.coin.change7d)}
++            />
++            <ResearchMetric
++              label="Momentum"
++              value={technicals?.momentum ?? "Unavailable"}
++              tone={technicals ? signalClass(technicals.momentum) : "text-foreground/70"}
++            />
++          </div>
++        </div>
++
++        <div>
++          <div className="data-label">Participation signals</div>
++          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
++            <ParticipationMetric icon={Users} label="Watchlists" value={sentiment?.watchlistUsers ?? null} />
++            <ParticipationMetric icon={Radio} label="Reddit" value={sentiment?.redditSubscribers ?? null} />
++            <ParticipationMetric icon={Star} label="GitHub stars" value={sentiment?.githubStars ?? null} />
++            <ParticipationMetric icon={GitFork} label="GitHub forks" value={sentiment?.githubForks ?? null} />
++          </div>
++          <div className="mt-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
++            <div className="flex items-center justify-between gap-3">
++              <div className="flex items-center gap-2">
++                <Code2 className="size-3.5 text-[var(--spectral-violet)]" />
++                <span className="data-label text-[8px]!">Commits / 4 weeks</span>
++              </div>
++              <span className="number-display font-heading text-sm font-medium">
++                {formatCompact(sentiment?.githubCommits4Weeks ?? null)}
++              </span>
++            </div>
++          </div>
++        </div>
++      </div>
++    </div>
++  );
++}
++
++function ParticipationMetric({
++  icon: Icon,
++  label,
++  value,
++}: {
++  icon: typeof Activity;
++  label: string;
++  value: number | null;
++}) {
++  return (
++    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-4">
++      <div className="flex items-center justify-between gap-2">
++        <span className="data-label text-[8px]!">{label}</span>
++        <Icon className="size-3 text-muted-foreground" />
++      </div>
++      <div className="mt-3 number-display font-heading text-sm font-medium">
++        {formatCompact(value)}
++      </div>
++    </div>
++  );
++}
++
++function EmptyResearchState({ title, body }: { title: string; body: string }) {
++  return (
++    <div className="animate-in fade-in slide-in-from-bottom-1 rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] p-5 duration-300">
++      <div className="font-heading text-sm font-medium">{title}</div>
++      <p className="mt-2 max-w-2xl text-xs leading-6 text-muted-foreground">{body}</p>
++    </div>
++  );
++}
++
++export function ResearchLayer({
++  detail,
++  research,
++  technicals,
++  news,
++}: {
++  detail: CoinDetail;
++  research: CoinResearch | null;
++  technicals: TechnicalSnapshot | null;
++  news: CoinNewsItem[];
++}) {
++  const [activeTab, setActiveTab] = useState<ResearchTab>("overview");
++
++  return (
++    <section className="spectral-panel spectral-edge mt-5 rounded-3xl px-5 py-5 sm:px-6 sm:py-6">
++      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10">
++        <div>
++          <div className="data-label">Research layer</div>
++          <h2 className="mt-1 font-heading text-base font-medium tracking-[-0.025em]">
++            About {detail.coin.name}
++          </h2>
++          <p className="mt-1.5 text-[10px] leading-5 text-muted-foreground">
++            Market, network, news and participation context in one surface.
++          </p>
++
++          <div
++            role="tablist"
++            aria-label={`${detail.coin.name} research sections`}
++            className="mt-4 flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:items-stretch lg:overflow-visible lg:pb-0"
++          >
++            {tabs.map((tab) => {
++              const Icon = tab.icon;
++              const isActive = activeTab === tab.id;
++
++              return (
++                <button
++                  key={tab.id}
++                  id={`research-tab-${tab.id}`}
++                  type="button"
++                  role="tab"
++                  aria-selected={isActive}
++                  aria-controls={`research-panel-${tab.id}`}
++                  onClick={() => setActiveTab(tab.id)}
++                  className={
++                    isActive
++                      ? "group flex shrink-0 items-center gap-2 rounded-xl border border-white/[0.09] bg-white/[0.07] px-3 py-2 text-left font-mono text-[9px] uppercase tracking-[0.08em] text-foreground transition-all duration-200 lg:w-full"
++                      : "group flex shrink-0 items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-left font-mono text-[9px] uppercase tracking-[0.08em] text-muted-foreground transition-all duration-200 hover:border-white/[0.05] hover:bg-white/[0.03] hover:text-foreground/80 lg:w-full"
++                  }
++                >
++                  <Icon
++                    className={
++                      isActive
++                        ? "size-3 text-[var(--spectral-violet)]"
++                        : "size-3 text-muted-foreground transition-colors group-hover:text-foreground/65"
++                    }
++                  />
++                  {tab.label}
++                </button>
++              );
++            })}
++          </div>
++        </div>
++
++        <div
++          id={`research-panel-${activeTab}`}
++          role="tabpanel"
++          aria-labelledby={`research-tab-${activeTab}`}
++          className="min-w-0 border-t border-white/[0.06] pt-5 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0"
++        >
++          {activeTab === "overview" ? (
++            <OverviewPanel detail={detail} research={research} technicals={technicals} news={news} />
++          ) : null}
++          {activeTab === "technicals" ? (
++            <TechnicalsPanel symbol={detail.coin.symbol} technicals={technicals} />
++          ) : null}
++          {activeTab === "fundamentals" ? (
++            <FundamentalsPanel fundamentals={research?.fundamentals} />
++          ) : null}
++          {activeTab === "news" ? (
++            <NewsPanel name={detail.coin.name} news={news} />
++          ) : null}
++          {activeTab === "sentiment" ? (
++            <SentimentPanel
++              sentiment={research?.sentiment}
++              detail={detail}
++              technicals={technicals}
++            />
++          ) : null}
++        </div>
++      </div>
++    </section>
++  );
++}
+diff -ruN a/web/src/app/coin/[id]/page.tsx b/web/src/app/coin/[id]/page.tsx
+--- a/web/src/app/coin/[id]/page.tsx	2026-09-18 01:14:27.475589555 +0000
++++ b/web/src/app/coin/[id]/page.tsx	2026-09-18 01:14:43.733514577 +0000
+@@ -7,6 +7,7 @@
+ import { CoinHeader } from "./_components/coin-header";
+ import { CoinMetrics } from "./_components/coin-metrics";
+ import { PriceChart } from "./_components/price-chart";
++import { ResearchLayer } from "./_components/research-layer";
+ 
+ type CoinPageProps = {
+   params: Promise<{ id: string }>;
+@@ -40,9 +41,11 @@
+     notFound();
+   }
+ 
+-  const [priceHistory, technicals] = await Promise.all([
++  const [priceHistory, technicals, research, news] = await Promise.all([
+     coinService.getPriceHistory(id, "7d"),
+     coinService.getTechnicals(id),
++    coinService.getResearch(id),
++    coinService.getNews(id),
+   ]);
+ 
+   return (
+@@ -61,39 +64,12 @@
+           <AnalysisSnapshot symbol={detail.coin.symbol} technicals={technicals} />
+         </section>
+ 
+-        <section className="spectral-panel spectral-edge mt-5 rounded-3xl px-5 py-5 sm:px-6 sm:py-6">
+-          <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10">
+-            <div>
+-              <div className="data-label">Research layer</div>
+-              <h2 className="mt-1 font-heading text-base font-medium tracking-[-0.025em]">
+-                About {detail.coin.name}
+-              </h2>
+-              <div className="mt-4 flex flex-wrap gap-1.5 lg:flex-col lg:items-start">
+-                {["Overview", "Technicals", "Fundamentals", "News", "Sentiment"].map(
+-                  (item, index) => (
+-                    <span
+-                      key={item}
+-                      className={
+-                        index === 0
+-                          ? "rounded-lg border border-white/[0.08] bg-white/[0.07] px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-foreground"
+-                          : "rounded-lg px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-muted-foreground"
+-                      }
+-                    >
+-                      {item}
+-                    </span>
+-                  ),
+-                )}
+-              </div>
+-            </div>
+-
+-            <div className="border-t border-white/[0.06] pt-5 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
+-              <p className="max-w-4xl text-sm leading-7 text-foreground/74">
+-                {detail.description ??
+-                  "Description unavailable from the market-data provider."}
+-              </p>
+-            </div>
+-          </div>
+-        </section>
++        <ResearchLayer
++          detail={detail}
++          research={research}
++          technicals={technicals}
++          news={news}
++        />
+ 
+         <footer className="mt-8 flex flex-col gap-2 border-t border-white/[0.06] pt-4 font-mono text-[9px] uppercase tracking-[0.08em] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+           <span>CMA / Asset research</span>
+diff -ruN a/web/src/services/coin.service.ts b/web/src/services/coin.service.ts
+--- a/web/src/services/coin.service.ts	2026-09-18 01:14:27.474553055 +0000
++++ b/web/src/services/coin.service.ts	2026-09-18 01:14:43.730860069 +0000
+@@ -1,6 +1,8 @@
+ import { ApiError, apiGet } from "@/lib/api-client";
+ import type {
+   CoinDetail,
++  CoinNewsItem,
++  CoinResearch,
+   PriceHistoryRange,
+   PricePoint,
+   TechnicalSnapshot,
+@@ -54,6 +56,33 @@
+       }
+ 
+       throw error;
++    }
++  },
++
++  async getResearch(id: string): Promise<CoinResearch | null> {
++    try {
++      return await apiGet<CoinResearch>(`${coinPath(id)}/research`);
++    } catch (error) {
++      if (
++        error instanceof ApiError &&
++        [404, 429, 502, 503].includes(error.status)
++      ) {
++        return null;
++      }
++
++      throw error;
++    }
++  },
++
++  async getNews(id: string): Promise<CoinNewsItem[]> {
++    try {
++      return await apiGet<CoinNewsItem[]>(`${coinPath(id)}/news`);
++    } catch (error) {
++      if (error instanceof ApiError) {
++        return [];
++      }
++
++      throw error;
+     }
+   },
+ };
+diff -ruN a/web/src/types/coin.ts b/web/src/types/coin.ts
+--- a/web/src/types/coin.ts	2026-09-18 01:14:27.473600359 +0000
++++ b/web/src/types/coin.ts	2026-09-18 01:14:43.727605355 +0000
+@@ -30,4 +30,44 @@
+   timeframe: "1h";
+ };
+ 
++export type CoinFundamentals = {
++  circulatingSupply: number | null;
++  totalSupply: number | null;
++  maxSupply: number | null;
++  fullyDilutedValuation: number | null;
++  allTimeHigh: number | null;
++  allTimeHighChangePercentage: number | null;
++  allTimeHighDate: string | null;
++  allTimeLow: number | null;
++  allTimeLowChangePercentage: number | null;
++  allTimeLowDate: string | null;
++  genesisDate: string | null;
++  hashingAlgorithm: string | null;
++  categories: string[];
++  homepageUrl: string | null;
++  blockchainExplorerUrl: string | null;
++};
++
++export type CoinSentiment = {
++  votesUpPercentage: number | null;
++  votesDownPercentage: number | null;
++  watchlistUsers: number | null;
++  redditSubscribers: number | null;
++  githubStars: number | null;
++  githubForks: number | null;
++  githubCommits4Weeks: number | null;
++};
++
++export type CoinResearch = {
++  fundamentals: CoinFundamentals;
++  sentiment: CoinSentiment;
++};
++
++export type CoinNewsItem = {
++  title: string;
++  source: string;
++  url: string;
++  publishedAt: string | null;
++};
++
+ export type PriceHistoryRange = "24h" | "7d" | "30d";
