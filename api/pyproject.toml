@@ -1,12 +1,15 @@
 [project]
 name = "crypto-market-analyzer-api"
 version = "0.1.0"
-description = "FastAPI backend for Crypto Market Analyzer"
+description = "FastAPI backend for Calyrn"
 requires-python = ">=3.12"
 dependencies = [
+  "alembic>=1.16,<2",
   "fastapi[standard]",
   "httpx",
+  "psycopg[binary]>=3.2,<4",
   "pydantic-settings",
+  "sqlalchemy>=2.0,<3",
 ]
 
 [dependency-groups]

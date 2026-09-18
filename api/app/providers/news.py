@@ -1,4 +1,4 @@
-from datetime import timezone
+from datetime import UTC
 from email.utils import parsedate_to_datetime
 from xml.etree import ElementTree
 
@@ -117,6 +117,6 @@ class GoogleNewsProvider:
             return None
 
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
+            parsed = parsed.replace(tzinfo=UTC)
 
-        return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z")

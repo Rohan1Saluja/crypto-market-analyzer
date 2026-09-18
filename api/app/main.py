@@ -4,8 +4,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
-from app.api.dependencies import close_market_provider
+from app.api.dependencies import SessionDep, close_market_provider
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.exceptions import (
@@ -13,6 +15,7 @@ from app.core.exceptions import (
     MarketDataRateLimitError,
     TechnicalAnalysisUnavailableError,
 )
+from app.db.session import dispose_database_engine
 
 settings = get_settings()
 
@@ -21,6 +24,7 @@ settings = get_settings()
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
     close_market_provider()
+    dispose_database_engine()
 
 
 app = FastAPI(
@@ -79,3 +83,16 @@ async def handle_analysis_unavailable(
 @app.get("/health", tags=["health"])
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/health/ready", tags=["health"], response_model=None)
+def readiness_check(session: SessionDep) -> dict[str, str] | JSONResponse:
+    try:
+        session.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "not_ready", "database": "unavailable"},
+        )
+
+    return {"status": "ready", "database": "ok"}
