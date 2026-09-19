@@ -7,6 +7,7 @@ from app.schemas.coin import (
     CoinDetail,
     CoinNewsItem,
     CoinResearch,
+    OhlcPoint,
     PricePoint,
     TechnicalSnapshot,
 )
@@ -40,6 +41,29 @@ def get_coin_price_history(
     ] = "7d",
 ) -> list[PricePoint]:
     history = service.get_coin_price_history(
+        coin_id,
+        time_range=time_range,
+    )
+
+    if history is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown coin: {coin_id}",
+        )
+
+    return history
+
+
+@router.get("/{coin_id}/ohlc", response_model=list[OhlcPoint])
+def get_coin_ohlc_history(
+    coin_id: str,
+    service: MarketServiceDep,
+    time_range: Annotated[
+        Literal["24h", "7d", "30d"],
+        Query(alias="range"),
+    ] = "7d",
+) -> list[OhlcPoint]:
+    history = service.get_coin_ohlc_history(
         coin_id,
         time_range=time_range,
     )

@@ -19,6 +19,14 @@ export type PricePoint = {
   volume24h: number | null;
 };
 
+export type OhlcPoint = {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+};
+
 export type TechnicalSnapshot = {
   momentum: "Bullish" | "Neutral" | "Bearish";
   rsi: number;

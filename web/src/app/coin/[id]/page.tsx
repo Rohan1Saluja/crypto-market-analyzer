@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 
 import { AppHeader } from "@/components/layout/app-header";
 import { coinService } from "@/services/coin.service";
+import { marketService } from "@/services/market.service";
 import { AnalysisSnapshot } from "./_components/analysis-snapshot";
 import { CoinHeader } from "./_components/coin-header";
 import { CoinMetrics } from "./_components/coin-metrics";
 import { PriceChart } from "./_components/price-chart";
+import { RelatedAssets } from "./_components/related-assets";
 import { ResearchLayer } from "./_components/research-layer";
 
 type CoinPageProps = {
@@ -41,16 +43,18 @@ export default async function CoinPage({ params }: CoinPageProps) {
     notFound();
   }
 
-  const [priceHistory, technicals, research, news] = await Promise.all([
-    coinService.getPriceHistory(id, "7d"),
-    coinService.getTechnicals(id),
-    coinService.getResearch(id),
-    coinService.getNews(id),
-  ]);
+  const [priceHistory, technicals, research, news, marketCoins] =
+    await Promise.all([
+      coinService.getPriceHistory(id, "7d"),
+      coinService.getTechnicals(id),
+      coinService.getResearch(id),
+      coinService.getNews(id),
+      marketService.getMarkets(),
+    ]);
 
   return (
     <div className="min-h-screen">
-      <AppHeader />
+      <AppHeader coins={marketCoins} />
 
       <main className="mx-auto w-full max-w-[1480px] px-4 pb-10 pt-8 sm:px-6 lg:px-8 lg:pt-10">
         <CoinHeader detail={detail} />
@@ -60,7 +64,11 @@ export default async function CoinPage({ params }: CoinPageProps) {
         </div>
 
         <section className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_370px]">
-          <PriceChart symbol={detail.coin.symbol} data={priceHistory ?? []} />
+          <PriceChart
+            coinId={id}
+            symbol={detail.coin.symbol}
+            data={priceHistory ?? []}
+          />
           <AnalysisSnapshot symbol={detail.coin.symbol} technicals={technicals} />
         </section>
 
@@ -70,6 +78,8 @@ export default async function CoinPage({ params }: CoinPageProps) {
           technicals={technicals}
           news={news}
         />
+
+        <RelatedAssets coins={marketCoins} currentId={id} />
 
         <footer className="mt-8 flex flex-col gap-2 border-t border-white/[0.06] pt-4 font-mono text-[9px] uppercase tracking-[0.08em] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>Calyrn / Asset research</span>

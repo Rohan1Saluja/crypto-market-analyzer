@@ -5,6 +5,7 @@ from app.schemas.coin import (
     CoinMetric,
     CoinNewsItem,
     CoinResearch,
+    OhlcPoint,
     PricePoint,
     TechnicalSnapshot,
 )
@@ -117,6 +118,17 @@ class MarketService:
         time_range: HistoryRange,
     ) -> list[PricePoint] | None:
         return self._provider.get_price_history(
+            coin_id,
+            time_range=time_range,
+        )
+
+    def get_coin_ohlc_history(
+        self,
+        coin_id: str,
+        *,
+        time_range: HistoryRange,
+    ) -> list[OhlcPoint] | None:
+        return self._provider.get_ohlc_history(
             coin_id,
             time_range=time_range,
         )

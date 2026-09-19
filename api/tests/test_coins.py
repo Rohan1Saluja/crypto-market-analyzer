@@ -26,6 +26,21 @@ def test_coin_price_history(client: TestClient) -> None:
     assert payload[0]["price"] > 0
 
 
+def test_coin_ohlc_history(client: TestClient) -> None:
+    response = client.get(
+        "/api/v1/coins/bitcoin/ohlc",
+        params={"range": "7d"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert len(payload) == 42
+    assert payload[0]["open"] > 0
+    assert payload[0]["high"] >= payload[0]["low"]
+    assert payload[0]["close"] > 0
+
+
 def test_coin_technicals_use_historical_prices(
     client: TestClient,
 ) -> None:

@@ -13,6 +13,14 @@ class PricePoint(ApiModel):
     volume_24h: float | None = None
 
 
+class OhlcPoint(ApiModel):
+    timestamp: int
+    open: float
+    high: float
+    low: float
+    close: float
+
+
 class CoinProfile(ApiModel):
     coin: MarketCoin
     description: str | None
