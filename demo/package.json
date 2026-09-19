@@ -6,6 +6,6 @@
     "record": "node record-calyrn.mjs"
   },
   "dependencies": {
-    "playwright": "^1.55.0"
+    "playwright": "1.63.0"
   }
 }

@@ -15,40 +15,33 @@ permissions:
 jobs:
   record:
     name: Record product demo
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
     timeout-minutes: 10
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 12.4.2
-          run_install: false
-
       - name: Install recorder dependencies
-        run: pnpm --dir demo install --no-lockfile
-
-      - name: Install Chromium
-        run: pnpm --dir demo exec playwright install --with-deps chromium
+        run: npm --prefix demo install --no-package-lock
 
       - name: Record live Calyrn flow
         env:
           TARGET_URL: ${{ inputs.target_url }}
-        run: pnpm --dir demo run record
+        run: npm --prefix demo run record
 
       - name: Ensure ffmpeg is available
         run: |
           if ! command -v ffmpeg >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg
+            apt-get update
+            apt-get install -y ffmpeg
           fi
           ffmpeg -version | head -n 1
 
