@@ -1,0 +1,83 @@
+name: Record Calyrn Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: Production URL to record
+        required: true
+        default: https://cma-rs.vercel.app
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    name: Record product demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+          run_install: false
+
+      - name: Install recorder dependencies
+        run: pnpm --dir demo install --no-lockfile
+
+      - name: Install Chromium
+        run: pnpm --dir demo exec playwright install --with-deps chromium
+
+      - name: Record live Calyrn flow
+        env:
+          TARGET_URL: ${{ inputs.target_url }}
+        run: pnpm --dir demo run record
+
+      - name: Ensure ffmpeg is available
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -version | head -n 1
+
+      - name: Convert recording to LinkedIn-ready MP4
+        run: |
+          ffmpeg -y \
+            -i demo/artifacts/calyrn-demo.webm \
+            -vf "fps=30,scale=1440:900:flags=lanczos" \
+            -c:v libx264 \
+            -preset medium \
+            -crf 20 \
+            -pix_fmt yuv420p \
+            -movflags +faststart \
+            -an \
+            demo/artifacts/calyrn-demo.mp4
+
+      - name: Upload MP4
+        uses: actions/upload-artifact@v4
+        with:
+          name: calyrn-linkedin-demo
+          path: demo/artifacts/calyrn-demo.mp4
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload debug artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: calyrn-demo-debug
+          path: demo/artifacts/
+          if-no-files-found: ignore
+          retention-days: 3

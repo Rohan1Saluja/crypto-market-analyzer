@@ -1,0 +1,11 @@
+{
+  "name": "calyrn-demo-recorder",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "record": "node record-calyrn.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.55.0"
+  }
+}
