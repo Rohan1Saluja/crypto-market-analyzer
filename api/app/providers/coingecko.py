@@ -8,7 +8,7 @@ import httpx
 from app.core.cache import TtlCache
 from app.core.exceptions import MarketDataProviderError, MarketDataRateLimitError
 from app.providers.base import HistoryRange
-from app.schemas.coin import CoinProfile, PricePoint
+from app.schemas.coin import CoinProfile, OhlcPoint, PricePoint
 from app.schemas.market import GlobalMarketSnapshot, MarketCoin
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -194,6 +194,68 @@ class CoinGeckoMarketProvider:
                     price=price,
                     market_cap=market_caps.get(timestamp),
                     volume_24h=volumes.get(timestamp),
+                )
+            )
+
+        return history
+
+    def get_ohlc_history(
+        self,
+        coin_id: str,
+        *,
+        time_range: HistoryRange,
+    ) -> list[OhlcPoint] | None:
+        day_map: dict[HistoryRange, int] = {
+            "24h": 1,
+            "7d": 7,
+            "30d": 30,
+        }
+
+        payload = self._get_json(
+            f"coins/{coin_id}/ohlc",
+            params={
+                "vs_currency": "usd",
+                "days": day_map[time_range],
+                "precision": "full",
+            },
+            ttl_seconds=self._history_cache_ttl_seconds,
+            allow_not_found=True,
+        )
+
+        if payload is None:
+            return None
+
+        if not isinstance(payload, list):
+            raise MarketDataProviderError("CoinGecko returned invalid OHLC history.")
+
+        history: list[OhlcPoint] = []
+
+        for row in payload:
+            if not isinstance(row, list) or len(row) < 5:
+                continue
+
+            timestamp = self._integer(row[0])
+            open_price = self._number(row[1])
+            high = self._number(row[2])
+            low = self._number(row[3])
+            close = self._number(row[4])
+
+            if (
+                timestamp is None
+                or open_price is None
+                or high is None
+                or low is None
+                or close is None
+            ):
+                continue
+
+            history.append(
+                OhlcPoint(
+                    timestamp=timestamp,
+                    open=open_price,
+                    high=high,
+                    low=low,
+                    close=close,
                 )
             )
 

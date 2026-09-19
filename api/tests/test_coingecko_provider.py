@@ -85,3 +85,39 @@ def test_market_chart_is_mapped_to_price_history() -> None:
     assert history[1].price == 11.0
     assert history[1].market_cap == 110.0
     assert history[1].volume_24h == 60.0
+
+
+def test_ohlc_chart_is_mapped_to_candles() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["days"] == "7"
+        assert request.url.params["precision"] == "full"
+
+        return httpx.Response(
+            200,
+            json=[
+                [1000, 10.0, 12.0, 9.0, 11.0],
+                [2000, 11.0, 13.0, 10.0, 12.0],
+            ],
+        )
+
+    provider = CoinGeckoMarketProvider(
+        api_key="demo-key",
+        base_url="https://api.coingecko.test/api/v3",
+        market_cache_ttl_seconds=60,
+        history_cache_ttl_seconds=300,
+        transport=httpx.MockTransport(handler),
+    )
+
+    try:
+        history = provider.get_ohlc_history(
+            "bitcoin",
+            time_range="7d",
+        )
+    finally:
+        provider.close()
+
+    assert history is not None
+    assert history[0].open == 10.0
+    assert history[0].high == 12.0
+    assert history[0].low == 9.0
+    assert history[0].close == 11.0

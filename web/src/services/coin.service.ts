@@ -3,6 +3,7 @@ import type {
   CoinDetail,
   CoinNewsItem,
   CoinResearch,
+  OhlcPoint,
   PriceHistoryRange,
   PricePoint,
   TechnicalSnapshot,
@@ -32,6 +33,23 @@ export const coinService = {
     try {
       return await apiGet<PricePoint[]>(
         `${coinPath(id)}/price-history?range=${range}`,
+      );
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return null;
+      }
+
+      throw error;
+    }
+  },
+
+  async getOhlcHistory(
+    id: string,
+    range: PriceHistoryRange,
+  ): Promise<OhlcPoint[] | null> {
+    try {
+      return await apiGet<OhlcPoint[]>(
+        `${coinPath(id)}/ohlc?range=${range}`,
       );
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
