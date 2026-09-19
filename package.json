@@ -11,5 +11,8 @@
     "web:build": "pnpm --dir web build",
     "web:lint": "pnpm --dir web lint"
   },
-  "packageManager": "pnpm@12.4.2"
+  "packageManager": "pnpm@12.4.2",
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
+  }
 }

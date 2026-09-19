@@ -5,6 +5,7 @@ import { marketService } from "@/services/market.service";
 import { MarketStatCard } from "./_components/market-stat-card";
 import { MarketTable } from "./_components/market-table";
 import { TopMovers } from "./_components/top-movers";
+import { Analytics } from "@vercel/analytics/next";
 
 export default async function Home() {
   const [marketStats, marketCoins] = await Promise.all([
@@ -91,6 +92,7 @@ export default async function Home() {
           </span>
         </footer>
       </main>
+      <Analytics />
     </div>
   );
 }
