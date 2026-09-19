@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.wallet import TrackedWallet
     from app.models.watchlist import WatchlistItem
 
 
@@ -26,6 +27,11 @@ class User(TimestampMixin, Base):
     )
 
     watchlist_items: Mapped[list[WatchlistItem]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    tracked_wallets: Mapped[list[TrackedWallet]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,

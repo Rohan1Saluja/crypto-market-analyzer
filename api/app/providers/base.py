@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Literal, Protocol
 
 from app.schemas.coin import (
@@ -7,6 +8,7 @@ from app.schemas.coin import (
     OhlcPoint,
     PricePoint,
 )
+from app.schemas.exposure import WalletHoldingsSnapshot
 from app.schemas.market import GlobalMarketSnapshot, MarketCoin
 
 HistoryRange = Literal["24h", "7d", "30d"]
@@ -58,6 +60,35 @@ class NewsProvider(Protocol):
         symbol: str,
         limit: int = 6,
     ) -> list[CoinNewsItem]:
+        ...
+
+    def close(self) -> None:
+        ...
+
+
+class WalletPortfolioProvider(Protocol):
+    def get_wallet_snapshot(
+        self,
+        *,
+        address: str,
+        network_id: str,
+    ) -> WalletHoldingsSnapshot:
+        ...
+
+    def close(self) -> None:
+        ...
+
+
+class TokenPriceProvider(Protocol):
+    def get_native_price_usd(self, *, network_id: str) -> Decimal | None:
+        ...
+
+    def get_token_prices_usd(
+        self,
+        *,
+        network_id: str,
+        asset_references: list[str],
+    ) -> dict[str, Decimal]:
         ...
 
     def close(self) -> None:

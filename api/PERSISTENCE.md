@@ -1,8 +1,8 @@
 # Calyrn persistence foundation
 
-Phase 3A introduces PostgreSQL as Calyrn's source of durable user state.
+PostgreSQL is Calyrn's source of durable private user state.
 
-## What this phase teaches
+## What this layer teaches
 
 - ORM models are application objects mapped to relational tables.
 - A migration is a versioned database schema change, not `create_all()` in production.
@@ -14,7 +14,7 @@ Phase 3A introduces PostgreSQL as Calyrn's source of durable user state.
 
 `users`
 - durable Calyrn user identity
-- `auth_subject` is intentionally provider-neutral so authentication can be added without redesigning the user table
+- `auth_subject` remains provider-neutral
 
 `watchlist_items`
 - belongs to one user
@@ -22,7 +22,21 @@ Phase 3A introduces PostgreSQL as Calyrn's source of durable user state.
 - optionally stores the user's thesis for that asset
 - unique on `(user_id, asset_id)`
 
-We are deliberately not adding wallets yet. Address normalization and chain identity deserve their own design pass in Phase 3B.
+`tracked_wallets`
+- a read-only address tracked by one Calyrn user
+- stores canonical address identity, not proof of wallet ownership
+- begins with the `evm` address family
+- keeps synchronization freshness/status separate from wallet identity
+- unique on `(user_id, address_family, address)`
+
+`wallet_positions`
+- current normalized on-chain balances for a tracked wallet
+- chain identity uses a canonical network id such as `eip155:1`
+- native assets and ERC-20 contracts have distinct asset identities
+- raw balances use exact decimal storage rather than floating point
+- unique on `(wallet_id, network_id, asset_reference)`
+
+Market prices and portfolio percentages are intentionally not persisted here. They are public/derived context and belong in the exposure read path.
 
 ## Local setup
 
