@@ -6,6 +6,14 @@ class MarketDataRateLimitError(MarketDataProviderError):
     pass
 
 
+class WalletPortfolioProviderError(RuntimeError):
+    pass
+
+
+class WalletPortfolioRateLimitError(WalletPortfolioProviderError):
+    pass
+
+
 class TechnicalAnalysisUnavailableError(RuntimeError):
     pass
 

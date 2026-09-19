@@ -10,6 +10,7 @@ os.environ.setdefault(
 os.environ.setdefault("CMA_AUTH0_DOMAIN", "calyrn-test.us.auth0.com")
 os.environ.setdefault("CMA_AUTH0_AUDIENCE", "https://api.calyrn.test")
 os.environ.setdefault("CMA_AUTH0_CLIENT_ID", "calyrn-test-client")
+os.environ.setdefault("CMA_ALCHEMY_API_KEY", "test-only-alchemy-key")
 
 from app.api.dependencies import get_market_service  # noqa: E402
 from app.main import app  # noqa: E402

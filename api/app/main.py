@@ -7,13 +7,15 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.api.dependencies import SessionDep, close_market_provider
+from app.api.dependencies import SessionDep, close_providers
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.exceptions import (
     MarketDataProviderError,
     MarketDataRateLimitError,
     TechnicalAnalysisUnavailableError,
+    WalletPortfolioProviderError,
+    WalletPortfolioRateLimitError,
 )
 from app.db.session import dispose_database_engine
 
@@ -23,7 +25,7 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
-    close_market_provider()
+    close_providers()
     dispose_database_engine()
 
 
@@ -66,6 +68,29 @@ async def handle_provider_error(
     return JSONResponse(
         status_code=status.HTTP_502_BAD_GATEWAY,
         content={"detail": "Market data provider is temporarily unavailable."},
+    )
+
+
+@app.exception_handler(WalletPortfolioRateLimitError)
+async def handle_wallet_provider_rate_limit(
+    _: Request,
+    __: WalletPortfolioRateLimitError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": "Wallet data is temporarily rate limited. Try again shortly."},
+        headers={"Retry-After": "60"},
+    )
+
+
+@app.exception_handler(WalletPortfolioProviderError)
+async def handle_wallet_provider_error(
+    _: Request,
+    __: WalletPortfolioProviderError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        content={"detail": "Wallet data provider is temporarily unavailable."},
     )
 
 

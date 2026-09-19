@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     research_cache_ttl_seconds: int = 300
     news_cache_ttl_seconds: int = 300
 
+    alchemy_api_key: SecretStr
+    alchemy_base_url: str = "https://api.g.alchemy.com/data/v1"
+
     model_config = SettingsConfigDict(
         env_file=API_ROOT / ".env",
         env_file_encoding="utf-8",
