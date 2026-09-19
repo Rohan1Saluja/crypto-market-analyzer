@@ -14,12 +14,14 @@ from app.core.exceptions import (
 from app.db.session import get_db_session
 from app.models.user import User
 from app.providers.alchemy import AlchemyWalletPortfolioProvider
-from app.providers.base import WalletPortfolioProvider
+from app.providers.base import TokenPriceProvider, WalletPortfolioProvider
 from app.providers.coingecko import CoinGeckoMarketProvider
 from app.providers.news import GoogleNewsProvider
 from app.providers.research import CoinGeckoResearchProvider
+from app.providers.token_price import CoinGeckoTokenPriceProvider
 from app.repositories.wallet_repository import WalletRepository
 from app.security.auth0 import Auth0IdentityProvider, Auth0TokenVerifier, AuthenticatedIdentity
+from app.services.exposure_service import ExposureService
 from app.services.market_service import MarketService
 from app.services.technical_service import TechnicalService
 from app.services.user_service import UserService
@@ -38,6 +40,11 @@ research_provider = CoinGeckoResearchProvider(
     api_key=settings.coingecko_api_key.get_secret_value(),
     base_url=settings.coingecko_base_url,
     cache_ttl_seconds=settings.research_cache_ttl_seconds,
+)
+token_price_provider = CoinGeckoTokenPriceProvider(
+    api_key=settings.coingecko_api_key.get_secret_value(),
+    base_url=settings.coingecko_base_url,
+    cache_ttl_seconds=settings.market_cache_ttl_seconds,
 )
 news_provider = GoogleNewsProvider(
     cache_ttl_seconds=settings.news_cache_ttl_seconds,
@@ -81,9 +88,17 @@ def get_wallet_portfolio_provider() -> WalletPortfolioProvider:
     return wallet_portfolio_provider
 
 
+def get_token_price_provider() -> TokenPriceProvider:
+    return token_price_provider
+
+
 WalletPortfolioProviderDep = Annotated[
     WalletPortfolioProvider,
     Depends(get_wallet_portfolio_provider),
+]
+TokenPriceProviderDep = Annotated[
+    TokenPriceProvider,
+    Depends(get_token_price_provider),
 ]
 
 
@@ -93,6 +108,15 @@ def get_wallet_service(
     return WalletService(
         repository=wallet_repository,
         provider=provider,
+    )
+
+
+def get_exposure_service(
+    price_provider: TokenPriceProviderDep,
+) -> ExposureService:
+    return ExposureService(
+        repository=wallet_repository,
+        price_provider=price_provider,
     )
 
 
@@ -123,11 +147,13 @@ def get_authenticated_identity(
 def close_providers() -> None:
     market_provider.close()
     research_provider.close()
+    token_price_provider.close()
     news_provider.close()
     wallet_portfolio_provider.close()
 
 
 MarketServiceDep = Annotated[MarketService, Depends(get_market_service)]
+ExposureServiceDep = Annotated[ExposureService, Depends(get_exposure_service)]
 SessionDep = Annotated[Session, Depends(get_db_session)]
 AuthenticatedIdentityDep = Annotated[AuthenticatedIdentity, Depends(get_authenticated_identity)]
 IdentityProviderDep = Annotated[Auth0IdentityProvider, Depends(get_identity_provider)]

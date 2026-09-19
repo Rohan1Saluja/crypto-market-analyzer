@@ -23,6 +23,27 @@ class WalletRepository:
             ),
         )
 
+    def list_positions_for_user(
+        self,
+        *,
+        session: Session,
+        user_id: UUID,
+    ) -> list[WalletPosition]:
+        return list(
+            session.scalars(
+                select(WalletPosition)
+                .join(
+                    TrackedWallet,
+                    WalletPosition.wallet_id == TrackedWallet.id,
+                )
+                .where(TrackedWallet.user_id == user_id)
+                .order_by(
+                    WalletPosition.network_id.asc(),
+                    WalletPosition.asset_reference.asc(),
+                ),
+            ),
+        )
+
     def get_for_user(
         self,
         *,

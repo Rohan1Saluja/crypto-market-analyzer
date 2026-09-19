@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 
 from app.api.dependencies import (
     CurrentUserDep,
+    ExposureServiceDep,
     SessionDep,
     WalletServiceDep,
     WatchlistServiceDep,
@@ -14,6 +15,7 @@ from app.core.exceptions import (
     WalletSnapshotMismatchError,
 )
 from app.domain.wallet import InvalidWalletAddressError
+from app.schemas.exposure import ExposureReadModel
 from app.schemas.user import CurrentUser
 from app.schemas.wallet import (
     TrackedWalletCreate,
@@ -162,4 +164,16 @@ def refresh_wallet(
     return WalletRefreshResult(
         wallet=TrackedWalletRead.model_validate(wallet),
         position_count=position_count,
+    )
+
+
+@router.get("/exposure", response_model=ExposureReadModel)
+def get_exposure(
+    current_user: CurrentUserDep,
+    session: SessionDep,
+    service: ExposureServiceDep,
+) -> ExposureReadModel:
+    return service.get_exposure(
+        session=session,
+        user=current_user,
     )
