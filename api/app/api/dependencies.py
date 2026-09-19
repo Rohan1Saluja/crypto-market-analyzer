@@ -18,10 +18,12 @@ from app.providers.base import WalletPortfolioProvider
 from app.providers.coingecko import CoinGeckoMarketProvider
 from app.providers.news import GoogleNewsProvider
 from app.providers.research import CoinGeckoResearchProvider
+from app.repositories.wallet_repository import WalletRepository
 from app.security.auth0 import Auth0IdentityProvider, Auth0TokenVerifier, AuthenticatedIdentity
 from app.services.market_service import MarketService
 from app.services.technical_service import TechnicalService
 from app.services.user_service import UserService
+from app.services.wallet_service import WalletService
 from app.services.watchlist_service import WatchlistService
 
 settings = get_settings()
@@ -53,6 +55,7 @@ market_service = MarketService(
 )
 user_service = UserService()
 watchlist_service = WatchlistService()
+wallet_repository = WalletRepository()
 auth0_token_verifier = Auth0TokenVerifier(
     issuer=settings.auth0_issuer,
     audience=settings.auth0_audience,
@@ -76,6 +79,21 @@ def get_watchlist_service() -> WatchlistService:
 
 def get_wallet_portfolio_provider() -> WalletPortfolioProvider:
     return wallet_portfolio_provider
+
+
+WalletPortfolioProviderDep = Annotated[
+    WalletPortfolioProvider,
+    Depends(get_wallet_portfolio_provider),
+]
+
+
+def get_wallet_service(
+    provider: WalletPortfolioProviderDep,
+) -> WalletService:
+    return WalletService(
+        repository=wallet_repository,
+        provider=provider,
+    )
 
 
 def get_identity_provider() -> Auth0IdentityProvider:
@@ -115,10 +133,7 @@ AuthenticatedIdentityDep = Annotated[AuthenticatedIdentity, Depends(get_authenti
 IdentityProviderDep = Annotated[Auth0IdentityProvider, Depends(get_identity_provider)]
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
 WatchlistServiceDep = Annotated[WatchlistService, Depends(get_watchlist_service)]
-WalletPortfolioProviderDep = Annotated[
-    WalletPortfolioProvider,
-    Depends(get_wallet_portfolio_provider),
-]
+WalletServiceDep = Annotated[WalletService, Depends(get_wallet_service)]
 
 
 def get_current_user(

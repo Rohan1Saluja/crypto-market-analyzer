@@ -14,6 +14,18 @@ class WalletPortfolioRateLimitError(WalletPortfolioProviderError):
     pass
 
 
+class WalletAlreadyTrackedError(RuntimeError):
+    pass
+
+
+class WalletNotFoundError(RuntimeError):
+    pass
+
+
+class WalletSnapshotMismatchError(RuntimeError):
+    pass
+
+
 class TechnicalAnalysisUnavailableError(RuntimeError):
     pass
 
