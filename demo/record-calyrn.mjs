@@ -1,4 +1,4 @@
-import { copyFile, mkdir, rm } from "node:fs/promises";
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -171,20 +171,21 @@ async function recordDemo() {
     await clickWithCursor(page, searchButton);
     await pause(250);
 
-    const searchInput = page.getByRole("textbox", {
-      name: "Search Calyrn assets",
-    });
+    console.log("[demo] Global search opened");
+
+    const searchInput = page.locator('[data-slot="command-input"]');
     await searchInput.waitFor({ state: "visible", timeout: 10_000 });
-    await searchInput.pressSequentially("Bitcoin", { delay: 60 });
-    await pause(300);
+    await searchInput.fill("Bitcoin");
+    await pause(350);
 
     const bitcoinOption = page
-      .getByRole("option")
+      .locator('[data-slot="command-item"]')
       .filter({ hasText: "Bitcoin" })
       .first();
 
     await clickWithCursor(page, bitcoinOption);
     await page.waitForURL(/\/coin\/bitcoin(?:$|[?#])/, { timeout: 30_000 });
+    console.log("[demo] Bitcoin research opened");
 
     const priceStructure = page.getByText("Price structure", { exact: true });
     await priceStructure.waitFor({ state: "visible", timeout: 30_000 });
@@ -200,6 +201,7 @@ async function recordDemo() {
     );
     await clickWithCursor(page, range30d);
     await priceResponse;
+    console.log("[demo] 30D line history loaded");
     await pause(500);
 
     const candlesButton = page.getByRole("button", {
@@ -215,6 +217,7 @@ async function recordDemo() {
     await page
       .getByRole("img", { name: /OHLC candlestick chart/i })
       .waitFor({ state: "visible", timeout: 10_000 });
+    console.log("[demo] 30D candles loaded");
     await pause(850);
 
     const researchLayer = page.getByText("Research layer", { exact: true });
@@ -222,6 +225,7 @@ async function recordDemo() {
 
     const fundamentalsTab = page.getByRole("tab", { name: "Fundamentals" });
     await clickWithCursor(page, fundamentalsTab);
+    console.log("[demo] Fundamentals opened");
     await pause(650);
 
     const continueResearch = page.getByText("Continue research", {
@@ -248,9 +252,22 @@ async function recordDemo() {
     await page
       .getByText("Price structure", { exact: true })
       .waitFor({ state: "visible", timeout: 30_000 });
+    console.log("[demo] Related asset opened");
     await pause(900);
   } catch (error) {
     failure = error;
+
+    const message =
+      error instanceof Error
+        ? `${error.stack ?? error.message}\n`
+        : `${String(error)}\n`;
+
+    await writeFile(
+      path.join(ARTIFACTS_DIR, "error.txt"),
+      message,
+      "utf8",
+    ).catch(() => {});
+
     await page
       .screenshot({
         path: path.join(ARTIFACTS_DIR, "failure.png"),
