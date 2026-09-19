@@ -38,3 +38,8 @@ export type ExposureReadModel = {
   wallets: ExposureWallet[];
   positions: ExposurePosition[];
 };
+
+export type ExposureLoadResult =
+  | { status: "ready"; exposure: ExposureReadModel }
+  | { status: "signed-out" }
+  | { status: "error"; message: string };

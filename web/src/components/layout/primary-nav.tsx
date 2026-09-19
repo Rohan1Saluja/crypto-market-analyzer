@@ -6,10 +6,10 @@ import { usePathname } from "next/navigation";
 const liveItems = [
   { label: "Markets", href: "/" },
   { label: "Research", href: "/research" },
+  { label: "Exposure", href: "/exposure" },
 ];
 
 const upcomingItems = [
-  { label: "Exposure", phase: "Phase 3B" },
   { label: "Signals", phase: "Monitor phase" },
 ];
 
